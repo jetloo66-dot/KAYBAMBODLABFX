@@ -1,0 +1,13 @@
+# KAYBAMBODLABFX Bot Framework Requirements
+# Core dependencies for the bot framework
+
+# No external dependencies required - uses only Python standard library
+# This keeps the framework lightweight and easily deployable
+
+# Optional dependencies for enhanced functionality:
+# requests>=2.28.0      # For web-based bots and API integrations  
+# schedule>=1.2.0       # For advanced task scheduling
+# click>=8.0.0          # For enhanced CLI interface
+# pydantic>=1.10.0      # For data validation and settings management
+# aiohttp>=3.8.0        # For async web operations
+# python-dateutil>=2.8.0  # For advanced date/time handling
