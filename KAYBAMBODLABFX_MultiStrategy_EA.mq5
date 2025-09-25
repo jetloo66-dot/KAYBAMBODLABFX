@@ -10,6 +10,12 @@
 
 #include <Trade\Trade.mqh>
 #include <Math\Stat\Math.mqh>
+#include "Include/NewsFilter.mqh"
+#include "Include/VisualIndicators.mqh"
+#include "Include/ConfigManager.mqh"
+#include "Include/TradeManager.mqh"
+#include "Include/TelegramNotifier.mqh"
+#include "Include/PriceActionAnalyzer.mqh"
 
 //--- Input Parameters
 input group "=== TIMEFRAME SETTINGS ==="
@@ -60,7 +66,12 @@ input color BuyZoneColor = clrLime;                         // Buy Zone Color
 input color SellZoneColor = clrOrange;                      // Sell Zone Color
 
 //--- Global Variables
-CTrade trade;
+CTradeManager* tradeManager;
+CNewsFilter* newsFilter;
+CVisualIndicators* visualIndicators;
+CConfigManager* configManager;
+CTelegramNotifications* telegramNotifier;
+
 datetime LastScanTime = 0;
 int Magic = 123456;
 
@@ -94,9 +105,32 @@ TrendDirection CurrentTrend = TREND_SIDEWAYS;
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit() {
-    trade.SetExpertMagicNumber(Magic);
-    trade.SetMarginMode();
-    trade.SetTypeFillingBySymbol(_Symbol);
+    // Initialize configuration manager first
+    configManager = new CConfigManager();
+    if(!configManager.LoadConfiguration()) {
+        Print("Failed to load configuration, using defaults");
+    }
+    
+    // Initialize trade manager with magic number
+    tradeManager = new CTradeManager(Magic);
+    tradeManager.SetLotSize(LotSize);
+    tradeManager.SetStopLoss(StopLossPips);
+    tradeManager.SetTakeProfit(TakeProfitPips);
+    tradeManager.SetTrailingStop(UseTrailingStop, TrailingStopPips, TrailingStepPips);
+    tradeManager.SetMaxPositions(1);
+    tradeManager.SetMaxRisk(2.0);
+    
+    // Initialize news filter
+    newsFilter = new CNewsFilter(NewsFilterMinutes);
+    newsFilter.SetEnabled(UseNewsFilter);
+    newsFilter.LoadNewsCalendar();
+    
+    // Initialize visual indicators
+    visualIndicators = new CVisualIndicators("KAYB_");
+    visualIndicators.SetColors(SupportColor, ResistanceColor, BuyZoneColor, SellZoneColor);
+    
+    // Initialize telegram notifier
+    telegramNotifier = new CTelegramNotifications(TelegramBotToken, TelegramChatID, SendTelegramNotifications);
     
     // Initialize arrays
     ArrayInitialize(Support, 0.0);
@@ -113,7 +147,7 @@ int OnInit() {
     Print("KAYBAMBODLABFX MultiStrategy EA initialized successfully");
     
     if(SendTelegramNotifications && TelegramBotToken != "" && TelegramChatID != "") {
-        SendTelegramMessage("🤖 KAYBAMBODLABFX EA Started on " + _Symbol);
+        telegramNotifier.SendMessage("🤖 KAYBAMBODLABFX EA Started on " + _Symbol);
     }
     
     return(INIT_SUCCEEDED);
@@ -124,17 +158,30 @@ int OnInit() {
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
     // Clean up chart objects
-    ObjectsDeleteAll(0, "KAYB_");
-    
-    if(SendTelegramNotifications && TelegramBotToken != "" && TelegramChatID != "") {
-        SendTelegramMessage("🛑 KAYBAMBODLABFX EA Stopped on " + _Symbol);
+    if(visualIndicators != NULL) {
+        visualIndicators.ClearAll();
+        delete visualIndicators;
     }
+    
+    if(SendTelegramNotifications && telegramNotifier != NULL) {
+        telegramNotifier.SendMessage("🛑 KAYBAMBODLABFX EA Stopped on " + _Symbol);
+    }
+    
+    // Clean up objects
+    if(tradeManager != NULL) delete tradeManager;
+    if(newsFilter != NULL) delete newsFilter;
+    if(configManager != NULL) delete configManager;
+    if(telegramNotifier != NULL) delete telegramNotifier;
+    
+    Print("KAYBAMBODLABFX EA deinitialized");
 }
 
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick() {
+    if(tradeManager == NULL) return;
+    
     // Check if it's time for market scan
     if(TimeCurrent() - LastScanTime >= ScanIntervalMinutes * 60) {
         PerformMarketAnalysis();
@@ -142,7 +189,7 @@ void OnTick() {
     }
     
     // Manage existing positions
-    ManageTrailingStop();
+    tradeManager.ManagePositions();
     
     // Check for new trade opportunities
     CheckTradeConditions();
@@ -152,6 +199,8 @@ void OnTick() {
 //| Perform comprehensive market analysis                            |
 //+------------------------------------------------------------------+
 void PerformMarketAnalysis() {
+    if(visualIndicators == NULL) return;
+    
     // Detect price levels on different timeframes
     DetectPriceLevels(AnalysisTimeframe1);
     DetectPriceLevels(AnalysisTimeframe2);
@@ -167,12 +216,20 @@ void PerformMarketAnalysis() {
     
     // Visualize levels and zones
     if(ShowLevels) {
-        VisualizeLevels();
+        visualIndicators.DrawSupportResistance(Support, Resistance, MaxLevelsToStore);
+        visualIndicators.DrawSwingLevels(SwingHigh, SwingLow, MaxLevelsToStore);
+        visualIndicators.DrawTrendStructure(HigherHigh, HigherLow, LowerHigh, LowerLow, MaxLevelsToStore);
     }
     
     if(ShowZones) {
         VisualizeZones();
     }
+    
+    // Update trend indicator
+    int trendDirection = 0;
+    if(CurrentTrend == TREND_UP) trendDirection = 1;
+    else if(CurrentTrend == TREND_DOWN) trendDirection = -1;
+    visualIndicators.DrawTrendIndicator(trendDirection);
 }
 
 //+------------------------------------------------------------------+
@@ -352,7 +409,7 @@ void DetermineTrend() {
 //| Check for trade conditions and execute trades                    |
 //+------------------------------------------------------------------+
 void CheckTradeConditions() {
-    if(UseNewsFilter && IsNewsTime()) {
+    if(newsFilter != NULL && newsFilter.IsNewsTime()) {
         return; // Don't trade during news
     }
     
@@ -667,13 +724,14 @@ bool IsNearSellLevel() {
 //| Execute Buy Trade                                                |
 //+------------------------------------------------------------------+
 void ExecuteBuyTrade(PatternInfo &patterns) {
-    if(PositionsTotal() > 0) return; // Only one position at a time
+    if(tradeManager == NULL) return;
+    if(tradeManager.GetOpenPositions(_Symbol) > 0) return; // Only one position at a time
     
     double price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
     double sl = price - StopLossPips * _Point;
     double tp = price + TakeProfitPips * _Point;
     
-    if(trade.Buy(LotSize, _Symbol, price, sl, tp, "KAYB Buy Signal")) {
+    if(tradeManager.OpenBuyPosition(_Symbol, LotSize, sl, tp, "KAYB Buy Signal")) {
         string message = "🟢 BUY ORDER EXECUTED\n";
         message += "Symbol: " + _Symbol + "\n";
         message += "Price: " + DoubleToString(price, _Digits) + "\n";
@@ -683,7 +741,14 @@ void ExecuteBuyTrade(PatternInfo &patterns) {
         message += "Trend: UPTREND\n";
         message += GetPatternDescription(patterns);
         
-        SendTelegramMessage(message);
+        if(telegramNotifier != NULL) {
+            telegramNotifier.SendMessage(message);
+        }
+        
+        // Draw entry signal on chart
+        if(visualIndicators != NULL) {
+            visualIndicators.DrawEntrySignal(price, true, "Pattern Signal");
+        }
     }
 }
 
@@ -691,13 +756,14 @@ void ExecuteBuyTrade(PatternInfo &patterns) {
 //| Execute Sell Trade                                               |
 //+------------------------------------------------------------------+
 void ExecuteSellTrade(PatternInfo &patterns) {
-    if(PositionsTotal() > 0) return; // Only one position at a time
+    if(tradeManager == NULL) return;
+    if(tradeManager.GetOpenPositions(_Symbol) > 0) return; // Only one position at a time
     
     double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double sl = price + StopLossPips * _Point;
     double tp = price - TakeProfitPips * _Point;
     
-    if(trade.Sell(LotSize, _Symbol, price, sl, tp, "KAYB Sell Signal")) {
+    if(tradeManager.OpenSellPosition(_Symbol, LotSize, sl, tp, "KAYB Sell Signal")) {
         string message = "🔴 SELL ORDER EXECUTED\n";
         message += "Symbol: " + _Symbol + "\n";
         message += "Price: " + DoubleToString(price, _Digits) + "\n";
@@ -707,7 +773,14 @@ void ExecuteSellTrade(PatternInfo &patterns) {
         message += "Trend: DOWNTREND\n";
         message += GetPatternDescription(patterns);
         
-        SendTelegramMessage(message);
+        if(telegramNotifier != NULL) {
+            telegramNotifier.SendMessage(message);
+        }
+        
+        // Draw entry signal on chart
+        if(visualIndicators != NULL) {
+            visualIndicators.DrawEntrySignal(price, false, "Pattern Signal");
+        }
     }
 }
 
@@ -726,146 +799,22 @@ string GetPatternDescription(PatternInfo &patterns) {
 }
 
 //+------------------------------------------------------------------+
-//| Manage Trailing Stop                                             |
-//+------------------------------------------------------------------+
-void ManageTrailingStop() {
-    if(!UseTrailingStop) return;
-    
-    for(int i = PositionsTotal() - 1; i >= 0; i--) {
-        if(PositionGetTicket(i)) {
-            if(PositionGetInteger(POSITION_MAGIC) == Magic) {
-                double currentSL = PositionGetDouble(POSITION_SL);
-                double currentPrice;
-                double newSL;
-                
-                if(PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) {
-                    currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-                    newSL = currentPrice - TrailingStopPips * _Point;
-                    
-                    if(newSL > currentSL + TrailingStepPips * _Point) {
-                        trade.PositionModify(PositionGetTicket(i), newSL, PositionGetDouble(POSITION_TP));
-                    }
-                } else if(PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_SELL) {
-                    currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-                    newSL = currentPrice + TrailingStopPips * _Point;
-                    
-                    if(newSL < currentSL - TrailingStepPips * _Point || currentSL == 0) {
-                        trade.PositionModify(PositionGetTicket(i), newSL, PositionGetDouble(POSITION_TP));
-                    }
-                }
-            }
-        }
-    }
-}
-
-//+------------------------------------------------------------------+
-//| News Filter                                                      |
-//+------------------------------------------------------------------+
-bool IsNewsTime() {
-    // Simplified news filter - can be enhanced with calendar data
-    datetime currentTime = TimeCurrent();
-    MqlDateTime dt;
-    TimeToStruct(currentTime, dt);
-    
-    // Avoid trading during typical news release hours
-    if((dt.hour >= 8 && dt.hour <= 10) ||   // London/NY overlap
-       (dt.hour >= 13 && dt.hour <= 15)) {   // NY session major news
-        return true;
-    }
-    
-    return false;
-}
-
-//+------------------------------------------------------------------+
 //| Draw Fibonacci Retracement                                       |
 //+------------------------------------------------------------------+
 void DrawFibonacciRetracement() {
-    ObjectDelete(0, "KAYB_Fibo");
+    if(visualIndicators == NULL) return;
     
     if(CurrentTrend == TREND_UP && SwingLow[1] > 0 && SwingHigh[0] > 0) {
         // Uptrend: From previous Swing Low to recent Swing High
-        ObjectCreate(0, "KAYB_Fibo", OBJ_FIBO, 0, 
-                    iTime(_Symbol, _Period, 10), SwingLow[1],
-                    iTime(_Symbol, _Period, 0), SwingHigh[0]);
-        ObjectSetInteger(0, "KAYB_Fibo", OBJPROP_COLOR, clrYellow);
-        ObjectSetInteger(0, "KAYB_Fibo", OBJPROP_STYLE, STYLE_DOT);
-        ObjectSetInteger(0, "KAYB_Fibo", OBJPROP_WIDTH, 1);
+        datetime startTime = iTime(_Symbol, _Period, 10);
+        datetime endTime = iTime(_Symbol, _Period, 0);
+        visualIndicators.DrawFibonacciRetracement(SwingHigh[0], SwingLow[1], startTime, endTime);
         
     } else if(CurrentTrend == TREND_DOWN && SwingHigh[1] > 0 && SwingLow[0] > 0) {
         // Downtrend: From previous Swing High to recent Swing Low
-        ObjectCreate(0, "KAYB_Fibo", OBJ_FIBO, 0,
-                    iTime(_Symbol, _Period, 10), SwingHigh[1],
-                    iTime(_Symbol, _Period, 0), SwingLow[0]);
-        ObjectSetInteger(0, "KAYB_Fibo", OBJPROP_COLOR, clrYellow);
-        ObjectSetInteger(0, "KAYB_Fibo", OBJPROP_STYLE, STYLE_DOT);
-        ObjectSetInteger(0, "KAYB_Fibo", OBJPROP_WIDTH, 1);
-    }
-}
-
-//+------------------------------------------------------------------+
-//| Visualize Support/Resistance Levels                             |
-//+------------------------------------------------------------------+
-void VisualizeLevels() {
-    // Clean up old objects
-    for(int i = ObjectsTotal(0) - 1; i >= 0; i--) {
-        string objName = ObjectName(0, i);
-        if(StringFind(objName, "KAYB_Level_") >= 0) {
-            ObjectDelete(0, objName);
-        }
-    }
-    
-    datetime currentTime = TimeCurrent();
-    datetime futureTime = currentTime + PeriodSeconds() * 50;
-    
-    // Draw Support levels
-    for(int i = 0; i < ArraySize(Support); i++) {
-        if(Support[i] > 0) {
-            string objName = "KAYB_Level_S" + IntegerToString(i);
-            ObjectCreate(0, objName, OBJ_TREND, 0, currentTime, Support[i], futureTime, Support[i]);
-            ObjectSetInteger(0, objName, OBJPROP_COLOR, SupportColor);
-            ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
-            ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
-            ObjectSetInteger(0, objName, OBJPROP_RAY_RIGHT, true);
-            ObjectSetString(0, objName, OBJPROP_TEXT, "S[" + IntegerToString(i) + "]");
-        }
-    }
-    
-    // Draw Resistance levels
-    for(int i = 0; i < ArraySize(Resistance); i++) {
-        if(Resistance[i] > 0) {
-            string objName = "KAYB_Level_R" + IntegerToString(i);
-            ObjectCreate(0, objName, OBJ_TREND, 0, currentTime, Resistance[i], futureTime, Resistance[i]);
-            ObjectSetInteger(0, objName, OBJPROP_COLOR, ResistanceColor);
-            ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
-            ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
-            ObjectSetInteger(0, objName, OBJPROP_RAY_RIGHT, true);
-            ObjectSetString(0, objName, OBJPROP_TEXT, "R[" + IntegerToString(i) + "]");
-        }
-    }
-    
-    // Draw Swing levels
-    for(int i = 0; i < ArraySize(SwingHigh); i++) {
-        if(SwingHigh[i] > 0) {
-            string objName = "KAYB_Level_SH" + IntegerToString(i);
-            ObjectCreate(0, objName, OBJ_TREND, 0, currentTime, SwingHigh[i], futureTime, SwingHigh[i]);
-            ObjectSetInteger(0, objName, OBJPROP_COLOR, clrOrange);
-            ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_DASH);
-            ObjectSetInteger(0, objName, OBJPROP_WIDTH, 1);
-            ObjectSetInteger(0, objName, OBJPROP_RAY_RIGHT, true);
-            ObjectSetString(0, objName, OBJPROP_TEXT, "SH[" + IntegerToString(i) + "]");
-        }
-    }
-    
-    for(int i = 0; i < ArraySize(SwingLow); i++) {
-        if(SwingLow[i] > 0) {
-            string objName = "KAYB_Level_SL" + IntegerToString(i);
-            ObjectCreate(0, objName, OBJ_TREND, 0, currentTime, SwingLow[i], futureTime, SwingLow[i]);
-            ObjectSetInteger(0, objName, OBJPROP_COLOR, clrCyan);
-            ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_DASH);
-            ObjectSetInteger(0, objName, OBJPROP_WIDTH, 1);
-            ObjectSetInteger(0, objName, OBJPROP_RAY_RIGHT, true);
-            ObjectSetString(0, objName, OBJPROP_TEXT, "SL[" + IntegerToString(i) + "]");
-        }
+        datetime startTime = iTime(_Symbol, _Period, 10);
+        datetime endTime = iTime(_Symbol, _Period, 0);
+        visualIndicators.DrawFibonacciRetracement(SwingHigh[1], SwingLow[0], startTime, endTime);
     }
 }
 
@@ -873,81 +822,25 @@ void VisualizeLevels() {
 //| Visualize Buy/Sell Zones                                        |
 //+------------------------------------------------------------------+
 void VisualizeZones() {
-    // Clean up old zones
-    for(int i = ObjectsTotal(0) - 1; i >= 0; i--) {
-        string objName = ObjectName(0, i);
-        if(StringFind(objName, "KAYB_Zone_") >= 0) {
-            ObjectDelete(0, objName);
-        }
-    }
+    if(visualIndicators == NULL) return;
     
-    double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    double buyLevels[10], sellLevels[10];
+    int buyCount = 0, sellCount = 0;
     double pipDistance = LevelProximityPips * _Point;
     
-    // Create buy zones
-    if(Support[0] > 0) {
-        CreateZone("KAYB_Zone_BuySupport", Support[0] - pipDistance, Support[0] + pipDistance, BuyZoneColor);
-    }
+    // Collect buy levels
+    if(Support[0] > 0) { buyLevels[buyCount] = Support[0]; buyCount++; }
+    if(HigherLow[0] > 0) { buyLevels[buyCount] = HigherLow[0]; buyCount++; }
+    if(SwingLow[0] > 0) { buyLevels[buyCount] = SwingLow[0]; buyCount++; }
     
-    if(HigherLow[0] > 0) {
-        CreateZone("KAYB_Zone_BuyHL", HigherLow[0] - pipDistance, HigherLow[0] + pipDistance, BuyZoneColor);
-    }
+    // Collect sell levels
+    if(Resistance[0] > 0) { sellLevels[sellCount] = Resistance[0]; sellCount++; }
+    if(LowerHigh[0] > 0) { sellLevels[sellCount] = LowerHigh[0]; sellCount++; }
+    if(SwingHigh[0] > 0) { sellLevels[sellCount] = SwingHigh[0]; sellCount++; }
     
-    if(SwingLow[0] > 0) {
-        CreateZone("KAYB_Zone_BuySL", SwingLow[0] - pipDistance, SwingLow[0] + pipDistance, BuyZoneColor);
-    }
-    
-    // Create sell zones
-    if(Resistance[0] > 0) {
-        CreateZone("KAYB_Zone_SellResistance", Resistance[0] - pipDistance, Resistance[0] + pipDistance, SellZoneColor);
-    }
-    
-    if(LowerHigh[0] > 0) {
-        CreateZone("KAYB_Zone_SellLH", LowerHigh[0] - pipDistance, LowerHigh[0] + pipDistance, SellZoneColor);
-    }
-    
-    if(SwingHigh[0] > 0) {
-        CreateZone("KAYB_Zone_SellSH", SwingHigh[0] - pipDistance, SwingHigh[0] + pipDistance, SellZoneColor);
-    }
-}
-
-//+------------------------------------------------------------------+
-//| Create Zone Rectangle                                            |
-//+------------------------------------------------------------------+
-void CreateZone(string name, double price1, double price2, color zoneColor) {
-    datetime currentTime = TimeCurrent();
-    datetime futureTime = currentTime + PeriodSeconds() * 50;
-    
-    ObjectCreate(0, name, OBJ_RECTANGLE, 0, currentTime, price1, futureTime, price2);
-    ObjectSetInteger(0, name, OBJPROP_COLOR, zoneColor);
-    ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
-    ObjectSetInteger(0, name, OBJPROP_WIDTH, 1);
-    ObjectSetInteger(0, name, OBJPROP_FILL, true);
-    ObjectSetInteger(0, name, OBJPROP_BACK, true);
-}
-
-//+------------------------------------------------------------------+
-//| Send Telegram Message                                            |
-//+------------------------------------------------------------------+
-void SendTelegramMessage(string message) {
-    if(!SendTelegramNotifications || TelegramBotToken == "" || TelegramChatID == "") {
-        return;
-    }
-    
-    string url = "https://api.telegram.org/bot" + TelegramBotToken + "/sendMessage";
-    string payload = "chat_id=" + TelegramChatID + "&text=" + message;
-    
-    char post[], result[];
-    string headers = "Content-Type: application/x-www-form-urlencoded\r\n";
-    
-    StringToCharArray(payload, post, 0, StringLen(payload));
-    
-    int timeout = 5000; // 5 seconds timeout
-    int res = WebRequest("POST", url, headers, timeout, post, result, headers);
-    
-    if(res == -1) {
-        Print("Telegram notification failed: ", GetLastError());
-    }
+    // Draw zones using visual indicators
+    visualIndicators.DrawBuyZones(buyLevels, pipDistance, buyCount);
+    visualIndicators.DrawSellZones(sellLevels, pipDistance, sellCount);
 }
 
 //+------------------------------------------------------------------+
