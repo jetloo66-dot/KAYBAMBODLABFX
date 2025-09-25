@@ -68,6 +68,7 @@ input color SellZoneColor = clrOrange;                      // Sell Zone Color
 //--- Global Variables and Objects
 CTrade trade;
 CPriceActionAnalyzer* priceAnalyzer;
+CPriceActionAnalyzer* patternAnalyzer; // Separate analyzer for M5 patterns
 CNewsFilter* newsFilter;
 CTelegramNotifications* telegram;
 CRiskManager* riskManager;
@@ -114,6 +115,7 @@ int OnInit() {
     
     // Initialize analysis objects
     priceAnalyzer = new CPriceActionAnalyzer(_Symbol, AnalysisTimeframe1, CandlesToScan);
+    patternAnalyzer = new CPriceActionAnalyzer(_Symbol, ExecutionTimeframe, PatternScanCandles);
     newsFilter = new CNewsFilter(NewsFilterMinutes);
     telegram = new CTelegramNotifications(TelegramBotToken, TelegramChatID, SendTelegramNotifications);
     riskManager = new CRiskManager(2.0, MaxTradesPerPair);
@@ -163,6 +165,7 @@ void OnDeinit(const int reason) {
     
     // Clean up objects
     if(priceAnalyzer != NULL) delete priceAnalyzer;
+    if(patternAnalyzer != NULL) delete patternAnalyzer;
     if(newsFilter != NULL) delete newsFilter;
     if(telegram != NULL) delete telegram;
     if(riskManager != NULL) delete riskManager;
@@ -369,32 +372,32 @@ void CheckTradeOpportunities() {
 PatternSequence AnalyzePatternsM5() {
     PatternSequence patterns = {};
     
-    if(priceAnalyzer == NULL) return patterns;
+    if(patternAnalyzer == NULL) return patterns;
     
     // Scan last 20 candles on M5 for patterns
     for(int i = 1; i <= PatternScanCandles; i++) {
         // Pattern detection
-        if(priceAnalyzer.IsPinBar(i, PinBarRatio)) {
+        if(patternAnalyzer.IsPinBar(i, PinBarRatio)) {
             patterns.PinBar = true;
             patterns.DetectionIndex = i;
         }
         
-        if(priceAnalyzer.IsDoji(i, DojiBodyRatio)) {
+        if(patternAnalyzer.IsDoji(i, DojiBodyRatio)) {
             patterns.Doji = true;
             patterns.DetectionIndex = i;
         }
         
-        if(priceAnalyzer.IsBullishEngulfing(i)) {
+        if(patternAnalyzer.IsBullishEngulfing(i)) {
             patterns.BullishEngulfing = true;
             patterns.DetectionIndex = i;
         }
         
-        if(priceAnalyzer.IsBearishEngulfing(i)) {
+        if(patternAnalyzer.IsBearishEngulfing(i)) {
             patterns.BearishEngulfing = true;
             patterns.DetectionIndex = i;
         }
         
-        if(priceAnalyzer.IsBreakOfStructure(i)) {
+        if(patternAnalyzer.IsBreakOfStructure(i)) {
             patterns.BreakOfStructure = true;
             patterns.DetectionIndex = i;
         }
