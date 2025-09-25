@@ -10,6 +10,9 @@
 
 #include <Trade\Trade.mqh>
 #include <Math\Stat\Math.mqh>
+#include "Include/Structs.mqh"
+#include "Include/LogManager.mqh"
+#include "Include/RiskManager.mqh"
 #include "Include/NewsFilter.mqh"
 #include "Include/VisualIndicators.mqh"
 #include "Include/ConfigManager.mqh"
@@ -71,6 +74,8 @@ CNewsFilter* newsFilter;
 CVisualIndicators* visualIndicators;
 CConfigManager* configManager;
 CTelegramNotifications* telegramNotifier;
+CLogManager* logManager;
+CRiskManager* riskManager;
 
 datetime LastScanTime = 0;
 int Magic = 123456;
@@ -105,11 +110,20 @@ TrendDirection CurrentTrend = TREND_SIDEWAYS;
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit() {
-    // Initialize configuration manager first
+    // Initialize log manager first for debugging
+    logManager = new CLogManager("KAYBAMBODLABFX_Log.txt");
+    logManager.SetLogLevel(LOG_LEVEL_INFO);
+    logManager.LogInfo("KAYBAMBODLABFX EA initialization started", "MAIN");
+    
+    // Initialize configuration manager
     configManager = new CConfigManager();
     if(!configManager.LoadConfiguration()) {
-        Print("Failed to load configuration, using defaults");
+        logManager.LogWarning("Failed to load configuration, using defaults", "CONFIG");
     }
+    
+    // Initialize risk manager
+    riskManager = new CRiskManager(2.0, 1); // 2% risk, max 1 position
+    logManager.LogInfo("Risk manager initialized", "RISK");
     
     // Initialize trade manager with magic number
     tradeManager = new CTradeManager(Magic);
@@ -119,18 +133,24 @@ int OnInit() {
     tradeManager.SetTrailingStop(UseTrailingStop, TrailingStopPips, TrailingStepPips);
     tradeManager.SetMaxPositions(1);
     tradeManager.SetMaxRisk(2.0);
+    logManager.LogInfo("Trade manager initialized", "TRADE");
     
     // Initialize news filter
     newsFilter = new CNewsFilter(NewsFilterMinutes);
     newsFilter.SetEnabled(UseNewsFilter);
     newsFilter.LoadNewsCalendar();
+    logManager.LogInfo("News filter initialized", "NEWS");
     
     // Initialize visual indicators
     visualIndicators = new CVisualIndicators("KAYB_");
     visualIndicators.SetColors(SupportColor, ResistanceColor, BuyZoneColor, SellZoneColor);
+    logManager.LogInfo("Visual indicators initialized", "VISUAL");
     
     // Initialize telegram notifier
     telegramNotifier = new CTelegramNotifications(TelegramBotToken, TelegramChatID, SendTelegramNotifications);
+    if(SendTelegramNotifications && TelegramBotToken != "" && TelegramChatID != "") {
+        logManager.LogInfo("Telegram notifications enabled", "TELEGRAM");
+    }
     
     // Initialize arrays
     ArrayInitialize(Support, 0.0);
@@ -144,7 +164,10 @@ int OnInit() {
     ArrayInitialize(High, 0.0);
     ArrayInitialize(Low, 0.0);
     
+    logManager.LogInfo("Price level arrays initialized", "MAIN");
+    
     Print("KAYBAMBODLABFX MultiStrategy EA initialized successfully");
+    logManager.LogInfo("KAYBAMBODLABFX MultiStrategy EA initialized successfully", "MAIN");
     
     if(SendTelegramNotifications && TelegramBotToken != "" && TelegramChatID != "") {
         telegramNotifier.SendMessage("🤖 KAYBAMBODLABFX EA Started on " + _Symbol);
@@ -157,6 +180,10 @@ int OnInit() {
 //| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
+    if(logManager != NULL) {
+        logManager.LogInfo("KAYBAMBODLABFX EA deinitialization started", "MAIN");
+    }
+    
     // Clean up chart objects
     if(visualIndicators != NULL) {
         visualIndicators.ClearAll();
@@ -172,6 +199,12 @@ void OnDeinit(const int reason) {
     if(newsFilter != NULL) delete newsFilter;
     if(configManager != NULL) delete configManager;
     if(telegramNotifier != NULL) delete telegramNotifier;
+    if(riskManager != NULL) delete riskManager;
+    
+    if(logManager != NULL) {
+        logManager.LogInfo("KAYBAMBODLABFX EA deinitialized successfully", "MAIN");
+        delete logManager;
+    }
     
     Print("KAYBAMBODLABFX EA deinitialized");
 }
@@ -384,25 +417,64 @@ void DetectTrendStructure(const double &high[], const double &low[]) {
 //| Determine current trend direction                                |
 //+------------------------------------------------------------------+
 void DetermineTrend() {
-    // Uptrend conditions
-    bool uptrend = (HigherHigh[0] > HigherHigh[1] && 
-                   HigherLow[0] > HigherLow[1] && 
-                   SwingHigh[0] > SwingHigh[1] && 
-                   SwingLow[0] > SwingLow[1]);
+    int uptrendCount = 0;
+    int downtrendCount = 0;
     
-    // Downtrend conditions  
-    bool downtrend = (HigherHigh[0] < HigherHigh[1] && 
-                     HigherLow[0] < HigherLow[1] && 
-                     SwingHigh[0] < SwingHigh[1] && 
-                     SwingLow[0] < SwingLow[1]);
+    // Criteria 1: Higher Highs and Higher Lows
+    if(HigherHigh[0] > HigherHigh[1] && HigherLow[0] > HigherLow[1]) {
+        uptrendCount++;
+    } else if(HigherHigh[0] < HigherHigh[1] && HigherLow[0] < HigherLow[1]) {
+        downtrendCount++;
+    }
     
-    if(uptrend) {
+    // Criteria 2: Recent Swing Highs and Lows
+    if(SwingHigh[0] > SwingHigh[1] && SwingLow[0] > SwingLow[1]) {
+        uptrendCount++;
+    } else if(SwingHigh[0] < SwingHigh[1] && SwingLow[0] < SwingLow[1]) {
+        downtrendCount++;
+    }
+    
+    // Criteria 3: Current High/Low vs Previous
+    if(High[0] > High[1] && Low[0] > Low[1]) {
+        uptrendCount++;
+    } else if(High[0] < High[1] && Low[0] < Low[1]) {
+        downtrendCount++;
+    }
+    
+    // Criteria 4: Support and Resistance levels
+    if(Support[0] > Support[1] && Resistance[0] > Resistance[1]) {
+        uptrendCount++;
+    } else if(Support[0] < Support[1] && Resistance[0] < Resistance[1]) {
+        downtrendCount++;
+    }
+    
+    // Criteria 5: Price action above/below key levels
+    double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    if(currentPrice > Support[0] && currentPrice > SwingLow[0]) {
+        uptrendCount++;
+    } else if(currentPrice < Resistance[0] && currentPrice < SwingHigh[0]) {
+        downtrendCount++;
+    }
+    
+    // Criteria 6: Break of structure confirmation
+    if(HigherHigh[0] > 0 && LowerLow[0] == 0) {
+        uptrendCount++;
+    } else if(LowerLow[0] > 0 && HigherHigh[0] == 0) {
+        downtrendCount++;
+    }
+    
+    // Determine trend based on criteria count (need at least 4 out of 6 for strong trend)
+    if(uptrendCount >= 4) {
         CurrentTrend = TREND_UP;
-    } else if(downtrend) {
+    } else if(downtrendCount >= 4) {
         CurrentTrend = TREND_DOWN;
     } else {
         CurrentTrend = TREND_SIDEWAYS;
     }
+    
+    // Log trend analysis for debugging
+    Print("Trend Analysis - Uptrend: ", uptrendCount, "/6, Downtrend: ", downtrendCount, "/6, Result: ", 
+          CurrentTrend == TREND_UP ? "UPTREND" : (CurrentTrend == TREND_DOWN ? "DOWNTREND" : "SIDEWAYS"));
 }
 
 //+------------------------------------------------------------------+
@@ -464,6 +536,12 @@ PatternInfo AnalyzePatterns() {
             patterns.PinBar = true;
             patterns.ConfirmationIndex = i;
             patterns.ConfirmationLevel = close[i];
+            
+            // Draw pattern marker on chart
+            if(visualIndicators != NULL) {
+                double markerPrice = (high[i] + low[i]) / 2;
+                visualIndicators.DrawPatternMarker("PinBar", i, markerPrice, clrYellow);
+            }
         }
         
         // Doji Detection
@@ -471,6 +549,12 @@ PatternInfo AnalyzePatterns() {
             patterns.Doji = true;
             patterns.ConfirmationIndex = i;
             patterns.ConfirmationLevel = close[i];
+            
+            // Draw pattern marker on chart
+            if(visualIndicators != NULL) {
+                double markerPrice = (high[i] + low[i]) / 2;
+                visualIndicators.DrawPatternMarker("Doji", i, markerPrice, clrWhite);
+            }
         }
         
         // Engulfing Patterns
@@ -480,6 +564,12 @@ PatternInfo AnalyzePatterns() {
                 patterns.BullishEngulfing = true;
                 patterns.ConfirmationIndex = i;
                 patterns.ConfirmationLevel = close[i+1];
+                
+                // Draw pattern marker on chart
+                if(visualIndicators != NULL) {
+                    double markerPrice = (high[i] + low[i]) / 2;
+                    visualIndicators.DrawPatternMarker("BullEngulf", i, markerPrice, clrLime);
+                }
             }
             
             if(IsBearishEngulfing(high[i], low[i], open[i], close[i], 
@@ -487,17 +577,35 @@ PatternInfo AnalyzePatterns() {
                 patterns.BearishEngulfing = true;
                 patterns.ConfirmationIndex = i;
                 patterns.ConfirmationLevel = close[i+1];
+                
+                // Draw pattern marker on chart
+                if(visualIndicators != NULL) {
+                    double markerPrice = (high[i] + low[i]) / 2;
+                    visualIndicators.DrawPatternMarker("BearEngulf", i, markerPrice, clrRed);
+                }
             }
         }
         
         // Break of Structure Detection
         if(IsBreakOfStructure(high, low, i)) {
             patterns.BreakOfStructure = true;
+            
+            // Draw pattern marker on chart
+            if(visualIndicators != NULL) {
+                double markerPrice = (high[i] + low[i]) / 2;
+                visualIndicators.DrawPatternMarker("BreakStruct", i, markerPrice, clrOrange);
+            }
         }
         
         // Retracement Detection
         if(IsRetracement(close, patterns.ConfirmationLevel, i)) {
             patterns.Retracement = true;
+            
+            // Draw pattern marker on chart
+            if(visualIndicators != NULL) {
+                double markerPrice = (high[i] + low[i]) / 2;
+                visualIndicators.DrawPatternMarker("Retracement", i, markerPrice, clrCyan);
+            }
         }
     }
     
@@ -658,14 +766,50 @@ bool CheckBuySequence(PatternInfo &patterns) {
 bool CheckSellSequence(PatternInfo &patterns) {
     if(!IsNearSellLevel()) return false;
     
-    // Similar sequences as buy but with bearish patterns
-    // Sequence I: (a) then (c) then (d) then (e)
+    // Sequence I: (a) then (c) then (d) then (e) - Pin Bar + Bearish Engulfing + Break of Structure + Retracement
     if(patterns.PinBar && patterns.BearishEngulfing && patterns.BreakOfStructure && patterns.Retracement) {
         return true;
     }
     
-    // Add other sequences similar to buy logic but with bearish conditions
-    // ... (implement all sequences)
+    // Sequence II: (a) then (d) then (e) - Pin Bar + Break of Structure + Retracement
+    if(patterns.PinBar && patterns.BreakOfStructure && patterns.Retracement) {
+        return true;
+    }
+    
+    // Sequence III: (a) then (c) then (e) - Pin Bar + Bearish Engulfing + Retracement
+    if(patterns.PinBar && patterns.BearishEngulfing && patterns.Retracement) {
+        return true;
+    }
+    
+    // Sequence IV: (b) then (c) then (e) - Doji + Bearish Engulfing + Retracement
+    if(patterns.Doji && patterns.BearishEngulfing && patterns.Retracement) {
+        return true;
+    }
+    
+    // Sequence V: (b) then (c) then (d) then (e) - Doji + Bearish Engulfing + Break of Structure + Retracement
+    if(patterns.Doji && patterns.BearishEngulfing && patterns.BreakOfStructure && patterns.Retracement) {
+        return true;
+    }
+    
+    // Sequence VI: (b) then (d) then (e) - Doji + Break of Structure + Retracement
+    if(patterns.Doji && patterns.BreakOfStructure && patterns.Retracement) {
+        return true;
+    }
+    
+    // Sequence VII: (c) then (d) then (e) - Bearish Engulfing + Break of Structure + Retracement
+    if(patterns.BearishEngulfing && patterns.BreakOfStructure && patterns.Retracement) {
+        return true;
+    }
+    
+    // Sequence VIII: (a) then (c) - Pin Bar + Bearish Engulfing
+    if(patterns.PinBar && patterns.BearishEngulfing) {
+        return true;
+    }
+    
+    // Sequence IX: (b) then (c) - Doji + Bearish Engulfing
+    if(patterns.Doji && patterns.BearishEngulfing) {
+        return true;
+    }
     
     return false;
 }
@@ -724,20 +868,32 @@ bool IsNearSellLevel() {
 //| Execute Buy Trade                                                |
 //+------------------------------------------------------------------+
 void ExecuteBuyTrade(PatternInfo &patterns) {
-    if(tradeManager == NULL) return;
+    if(tradeManager == NULL || riskManager == NULL) return;
     if(tradeManager.GetOpenPositions(_Symbol) > 0) return; // Only one position at a time
+    
+    // Risk management checks
+    if(!riskManager.IsTradeAllowed()) {
+        if(logManager != NULL) {
+            logManager.LogWarning("Trade rejected by risk management", "RISK");
+        }
+        return;
+    }
     
     double price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
     double sl = price - StopLossPips * _Point;
     double tp = price + TakeProfitPips * _Point;
     
-    if(tradeManager.OpenBuyPosition(_Symbol, LotSize, sl, tp, "KAYB Buy Signal")) {
+    // Calculate risk-adjusted lot size
+    double riskLotSize = riskManager.CalculateLotSize(StopLossPips, 2.0);
+    double lotToUse = (riskLotSize > 0 && riskLotSize < LotSize) ? riskLotSize : LotSize;
+    
+    if(tradeManager.OpenBuyPosition(_Symbol, lotToUse, sl, tp, "KAYB Buy Signal")) {
         string message = "🟢 BUY ORDER EXECUTED\n";
         message += "Symbol: " + _Symbol + "\n";
         message += "Price: " + DoubleToString(price, _Digits) + "\n";
         message += "SL: " + DoubleToString(sl, _Digits) + "\n";
         message += "TP: " + DoubleToString(tp, _Digits) + "\n";
-        message += "Lot: " + DoubleToString(LotSize, 2) + "\n";
+        message += "Lot: " + DoubleToString(lotToUse, 2) + "\n";
         message += "Trend: UPTREND\n";
         message += GetPatternDescription(patterns);
         
@@ -745,9 +901,17 @@ void ExecuteBuyTrade(PatternInfo &patterns) {
             telegramNotifier.SendMessage(message);
         }
         
+        if(logManager != NULL) {
+            logManager.LogTrade("BUY", _Symbol, price, lotToUse, "Pattern-based signal");
+        }
+        
         // Draw entry signal on chart
         if(visualIndicators != NULL) {
             visualIndicators.DrawEntrySignal(price, true, "Pattern Signal");
+        }
+    } else {
+        if(logManager != NULL) {
+            logManager.LogError("Failed to execute BUY trade", "TRADE");
         }
     }
 }
@@ -756,20 +920,32 @@ void ExecuteBuyTrade(PatternInfo &patterns) {
 //| Execute Sell Trade                                               |
 //+------------------------------------------------------------------+
 void ExecuteSellTrade(PatternInfo &patterns) {
-    if(tradeManager == NULL) return;
+    if(tradeManager == NULL || riskManager == NULL) return;
     if(tradeManager.GetOpenPositions(_Symbol) > 0) return; // Only one position at a time
+    
+    // Risk management checks
+    if(!riskManager.IsTradeAllowed()) {
+        if(logManager != NULL) {
+            logManager.LogWarning("Trade rejected by risk management", "RISK");
+        }
+        return;
+    }
     
     double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double sl = price + StopLossPips * _Point;
     double tp = price - TakeProfitPips * _Point;
     
-    if(tradeManager.OpenSellPosition(_Symbol, LotSize, sl, tp, "KAYB Sell Signal")) {
+    // Calculate risk-adjusted lot size
+    double riskLotSize = riskManager.CalculateLotSize(StopLossPips, 2.0);
+    double lotToUse = (riskLotSize > 0 && riskLotSize < LotSize) ? riskLotSize : LotSize;
+    
+    if(tradeManager.OpenSellPosition(_Symbol, lotToUse, sl, tp, "KAYB Sell Signal")) {
         string message = "🔴 SELL ORDER EXECUTED\n";
         message += "Symbol: " + _Symbol + "\n";
         message += "Price: " + DoubleToString(price, _Digits) + "\n";
         message += "SL: " + DoubleToString(sl, _Digits) + "\n";
         message += "TP: " + DoubleToString(tp, _Digits) + "\n";
-        message += "Lot: " + DoubleToString(LotSize, 2) + "\n";
+        message += "Lot: " + DoubleToString(lotToUse, 2) + "\n";
         message += "Trend: DOWNTREND\n";
         message += GetPatternDescription(patterns);
         
@@ -777,9 +953,17 @@ void ExecuteSellTrade(PatternInfo &patterns) {
             telegramNotifier.SendMessage(message);
         }
         
+        if(logManager != NULL) {
+            logManager.LogTrade("SELL", _Symbol, price, lotToUse, "Pattern-based signal");
+        }
+        
         // Draw entry signal on chart
         if(visualIndicators != NULL) {
             visualIndicators.DrawEntrySignal(price, false, "Pattern Signal");
+        }
+    } else {
+        if(logManager != NULL) {
+            logManager.LogError("Failed to execute SELL trade", "TRADE");
         }
     }
 }
