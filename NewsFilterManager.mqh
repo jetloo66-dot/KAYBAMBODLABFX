@@ -111,7 +111,7 @@ CNewsFilterManager::~CNewsFilterManager() {
 //+------------------------------------------------------------------+
 //| Initialize news filter manager                                   |
 //+------------------------------------------------------------------+
-bool CNewsFilterManager::Initialize(int filterMinutes = 30, int minImportance = 2) {
+bool CNewsFilterManager::Initialize(int filterMinutes, int minImportance) {
     m_filterMinutesBefore = filterMinutes;
     m_filterMinutesAfter = filterMinutes;
     m_minImportance = minImportance;
@@ -467,8 +467,9 @@ void CNewsFilterManager::RemoveOldEvents() {
             }
         }
         
-        ArrayFree(m_events);
-        m_events = validEvents;
+        // Use ArrayCopy to properly transfer data
+        ArrayResize(m_events, validCount);
+        ArrayCopy(m_events, validEvents, 0, 0, validCount);
         m_eventCount = validCount;
     }
 }

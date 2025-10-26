@@ -108,7 +108,7 @@ logger.LogTrade("BUY", "EURUSD", 1.1000, 0.01);
 logger.PrintLogStatistics();
 ```
 
-**Dependencies:** Structs_Version1.mqh, GlobalVariables_Version1.mqh
+**Dependencies:** Structs_Version1.mqh
 
 **Used By:** ModularTradingBot.mq5
 

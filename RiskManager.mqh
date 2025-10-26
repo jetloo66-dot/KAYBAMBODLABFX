@@ -152,7 +152,7 @@ CRiskManager::~CRiskManager() {
 //+------------------------------------------------------------------+
 //| Initialize risk manager                                          |
 //+------------------------------------------------------------------+
-bool CRiskManager::Initialize(double maxRiskPercent = 2.0, double maxDailyLoss = 10.0, double maxDrawdown = 20.0) {
+bool CRiskManager::Initialize(double maxRiskPercent, double maxDailyLoss, double maxDrawdown) {
     m_maxRiskPercent = maxRiskPercent;
     m_maxDailyLossPercent = maxDailyLoss;
     m_maxDrawdownPercent = maxDrawdown;
@@ -195,7 +195,7 @@ void CRiskManager::SetMaxDrawdown(double percent) {
 //+------------------------------------------------------------------+
 //| Calculate lot size based on risk                                 |
 //+------------------------------------------------------------------+
-double CRiskManager::CalculateLotSize(string symbol, double stopLossPips, double riskPercent = -1) {
+double CRiskManager::CalculateLotSize(string symbol, double stopLossPips, double riskPercent) {
     if(riskPercent < 0) {
         riskPercent = m_maxRiskPercent;
     }
@@ -512,7 +512,9 @@ PositionData CRiskManager::GetPosition(int index) {
 }
 
 //+------------------------------------------------------------------+
-//| Get total exposure                                               |
+//| Get total exposure (position values, not actual risk)            |
+//| Note: This calculates total position value (volume * price).     |
+//| For actual risk exposure, calculate SL distance * pip value      |
 //+------------------------------------------------------------------+
 double CRiskManager::GetTotalExposure() {
     double totalExposure = 0.0;
@@ -526,7 +528,9 @@ double CRiskManager::GetTotalExposure() {
 }
 
 //+------------------------------------------------------------------+
-//| Get total exposure for symbol                                    |
+//| Get total exposure for symbol (position values, not actual risk) |
+//| Note: This calculates total position value (volume * price).     |
+//| For actual risk exposure, calculate SL distance * pip value      |
 //+------------------------------------------------------------------+
 double CRiskManager::GetTotalExposure(string symbol) {
     double totalExposure = 0.0;
