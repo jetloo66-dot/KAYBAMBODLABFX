@@ -1,0 +1,11 @@
+# KAYBAMBODLABFX Requirements
+# Core Python packages (using only standard library for minimal dependencies)
+
+# Optional packages for enhanced functionality:
+# numpy>=1.21.0
+# pandas>=1.3.0
+# matplotlib>=3.4.0
+# requests>=2.25.0
+
+# For now, this bot uses only Python standard library
+# to keep dependencies minimal and ensure broad compatibility
