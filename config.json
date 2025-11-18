@@ -1,0 +1,25 @@
+{
+  "bot_framework": {
+    "registry_file": "bot_registry.json",
+    "log_level": "INFO",
+    "max_concurrent_bots": 10,
+    "default_bot_timeout": 300,
+    "enable_plugins": true
+  },
+  "problem_solver": {
+    "max_analysis_depth": 5,
+    "enable_advanced_strategies": true,
+    "default_complexity": "medium"
+  },
+  "task_automation": {
+    "max_concurrent_tasks": 5,
+    "task_timeout": 600,
+    "enable_scheduling": true,
+    "safe_mode": true
+  },
+  "interactive": {
+    "max_conversation_history": 100,
+    "enable_context_persistence": true,
+    "command_timeout": 30
+  }
+}
