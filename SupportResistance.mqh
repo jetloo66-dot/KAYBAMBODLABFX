@@ -199,17 +199,38 @@ void CSupportResistance::MergeLevels(void) {
     
     // Remove inactive levels
     SRLevel temp[];
-    ArrayResize(temp, 0);
+    int tempCount = 0;
     
+    // Count active levels
     for(int i = 0; i < size; i++) {
         if(m_levels[i].isActive) {
-            int tempSize = ArraySize(temp);
-            ArrayResize(temp, tempSize + 1);
-            temp[tempSize] = m_levels[i];
+            tempCount++;
         }
     }
     
-    ArrayCopy(m_levels, temp);
+    // Resize and copy active levels manually (ArrayCopy doesn't work with structures containing strings)
+    ArrayResize(temp, tempCount);
+    int tempIndex = 0;
+    for(int i = 0; i < size; i++) {
+        if(m_levels[i].isActive) {
+            temp[tempIndex].price = m_levels[i].price;
+            temp[tempIndex].firstTouch = m_levels[i].firstTouch;
+            temp[tempIndex].lastTouch = m_levels[i].lastTouch;
+            temp[tempIndex].touchCount = m_levels[i].touchCount;
+            temp[tempIndex].strength = m_levels[i].strength;
+            temp[tempIndex].isSupport = m_levels[i].isSupport;
+            temp[tempIndex].isResistance = m_levels[i].isResistance;
+            temp[tempIndex].isActive = m_levels[i].isActive;
+            temp[tempIndex].description = m_levels[i].description;
+            tempIndex++;
+        }
+    }
+    
+    // Replace m_levels with temp
+    ArrayResize(m_levels, tempCount);
+    for(int i = 0; i < tempCount; i++) {
+        m_levels[i] = temp[i];
+    }
 }
 
 //+------------------------------------------------------------------+

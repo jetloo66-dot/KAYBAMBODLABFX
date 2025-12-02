@@ -258,7 +258,11 @@ void CSwingDetection::CleanOldSwings(void) {
         for(int i = 0; i < m_maxSwings; i++) {
             temp[i] = m_swingHighs[highCount - m_maxSwings + i];
         }
-        ArrayCopy(m_swingHighs, temp);
+        // Manually copy instead of ArrayCopy to ensure compatibility
+        ArrayResize(m_swingHighs, m_maxSwings);
+        for(int i = 0; i < m_maxSwings; i++) {
+            m_swingHighs[i] = temp[i];
+        }
     }
     
     int lowCount = ArraySize(m_swingLows);
@@ -268,7 +272,11 @@ void CSwingDetection::CleanOldSwings(void) {
         for(int i = 0; i < m_maxSwings; i++) {
             temp[i] = m_swingLows[lowCount - m_maxSwings + i];
         }
-        ArrayCopy(m_swingLows, temp);
+        // Manually copy instead of ArrayCopy to ensure compatibility
+        ArrayResize(m_swingLows, m_maxSwings);
+        for(int i = 0; i < m_maxSwings; i++) {
+            m_swingLows[i] = temp[i];
+        }
     }
 }
 
