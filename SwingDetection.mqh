@@ -134,7 +134,10 @@ void CSwingDetection::Update(void) {
     }
     
     // Scan for swing highs and lows
-    for(int i = m_rightBars; i < MathMin(bars - m_leftBars, 200); i++) {
+    // Limit scan to 200 bars by default to balance accuracy and performance
+    // This can be adjusted based on timeframe and requirements
+    int maxScanBars = 200;
+    for(int i = m_rightBars; i < MathMin(bars - m_leftBars, maxScanBars); i++) {
         if(IsSwingHigh(i)) {
             MqlRates rates[];
             if(CopyRates(m_symbol, m_timeframe, i, 1, rates) > 0) {

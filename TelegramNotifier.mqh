@@ -237,11 +237,13 @@ bool CTelegramNotifier::SendHTTPRequest(string message) {
                  "&text=" + encodedMessage +
                  "&parse_mode=Markdown";
     
-    char data[];
-    char result[];
-    string headers = "";
+    // Initialize arrays for WebRequest
+    char data[];      // Empty for GET request
+    char result[];    // Will contain response
+    string headers = ""; // No custom headers needed for GET
     
     ResetLastError();
+    // WebRequest for GET: url, headers, timeout, data (empty), result, response headers
     int res = WebRequest("GET", url, headers, 5000, data, result, headers);
     
     if(res == -1) {

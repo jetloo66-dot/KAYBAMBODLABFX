@@ -139,9 +139,16 @@ Enable/disable trading for each symbol:
 - BTCUSD (Bitcoin)
 
 #### Telegram Notifications
-- **Bot Token**: `8472308793:AAGirMjp6R5Fjvbm8W5_X7EpL8LDt-LPikw`
-- **Chat ID**: `394543952`
+- **Bot Token**: Your Telegram bot token (obtain from @BotFather)
+- **Chat ID**: Your Telegram chat ID (obtain from @userinfobot)
 - **Enable Telegram**: true/false
+
+**How to get Telegram credentials:**
+1. Open Telegram and search for @BotFather
+2. Send `/newbot` command and follow instructions
+3. Copy the bot token provided
+4. Search for @userinfobot and send `/start`
+5. Copy your chat ID (numeric value)
 
 ### Advanced Parameters
 

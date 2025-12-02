@@ -44,6 +44,7 @@ input group "=== Swing Detection ==="
 input int InpSwingLeftBars = 5;                         // Swing Left Bars
 input int InpSwingRightBars = 5;                        // Swing Right Bars
 input int InpMaxSwingLevels = 10;                       // Max Swing Levels to Store
+input int InpSwingScanBars = 200;                       // Max Bars to Scan for Swings
 
 //--- Trade Management
 input group "=== Trade Management ==="
@@ -96,8 +97,8 @@ input int InpNewsFilterMinutes = 60;                    // Minutes Before/After 
 //--- Telegram Settings
 input group "=== Telegram Notifications ==="
 input bool InpEnableTelegram = true;                    // Enable Telegram
-input string InpBotToken = "8472308793:AAGirMjp6R5Fjvbm8W5_X7EpL8LDt-LPikw"; // Bot Token
-input string InpChatID = "394543952";                   // Chat ID
+input string InpBotToken = "";                          // Bot Token
+input string InpChatID = "";                            // Chat ID
 
 //--- Visualization
 input group "=== Visualization ==="

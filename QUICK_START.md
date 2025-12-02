@@ -52,8 +52,8 @@ All others: false (start with one symbol)
 
 === Telegram Notifications ===
 Enable Telegram: true
-Bot Token: 8472308793:AAGirMjp6R5Fjvbm8W5_X7EpL8LDt-LPikw
-Chat ID: 394543952
+Bot Token: YOUR_BOT_TOKEN_HERE
+Chat ID: YOUR_CHAT_ID_HERE
 ```
 
 Click OK and you're done! 🚀

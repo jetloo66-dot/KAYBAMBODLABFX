@@ -176,6 +176,7 @@ bool CSignalGenerator::Initialize(int stochK = 5, int stochD = 3, int stochSlowi
     }
     
     // Initialize swing detectors
+    // Note: maxSwings parameter is hardcoded, could be made configurable if needed
     m_htfSwingDetector = new CSwingDetection(m_symbol, m_htfTimeframe, 5, 5, 10);
     m_ltfSwingDetector = new CSwingDetection(m_symbol, m_ltfTimeframe, 3, 3, 10);
     
