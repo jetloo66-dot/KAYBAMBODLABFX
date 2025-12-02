@@ -41,10 +41,11 @@ input double InpBBDeviation = 2.0;                      // Bollinger Bands Devia
 
 //--- Swing Detection Settings
 input group "=== Swing Detection ==="
-input int InpSwingLeftBars = 5;                         // Swing Left Bars
-input int InpSwingRightBars = 5;                        // Swing Right Bars
+input int InpSwingLeftBars = 5;                         // Swing Left Bars (HTF)
+input int InpSwingRightBars = 5;                        // Swing Right Bars (HTF)
+input int InpSwingLeftBarsLTF = 3;                      // Swing Left Bars (LTF)
+input int InpSwingRightBarsLTF = 3;                     // Swing Right Bars (LTF)
 input int InpMaxSwingLevels = 10;                       // Max Swing Levels to Store
-input int InpSwingScanBars = 200;                       // Max Bars to Scan for Swings
 
 //--- Trade Management
 input group "=== Trade Management ==="
@@ -327,7 +328,10 @@ void AddSymbolIfEnabled(string symbol, bool enabled) {
     if(!g_symbols[size].signalGen.Initialize(InpStochK, InpStochD, InpStochSlowing,
                                              InpStochOversold, InpStochOverbought,
                                              InpBBPeriod, InpBBDeviation,
-                                             InpSLPips, InpTPPips)) {
+                                             InpSLPips, InpTPPips,
+                                             InpSwingLeftBars, InpSwingRightBars,
+                                             InpSwingLeftBarsLTF, InpSwingRightBarsLTF,
+                                             InpMaxSwingLevels)) {
         if(errorHandler != NULL) {
             errorHandler.LogError("AddSymbol", "Failed to initialize signal generator for " + symbol);
         }

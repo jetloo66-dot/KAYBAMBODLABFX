@@ -243,9 +243,12 @@ bool CTelegramNotifier::SendHTTPRequest(string message) {
     string headers = ""; // No custom headers needed for GET
     
     ResetLastError();
-    // WebRequest for GET: method, url, headers, timeout, data (empty), result, response_headers
-    string response_headers = "";
-    int res = WebRequest("GET", url, headers, 5000, data, result, response_headers);
+    // WebRequest: method, url, cookie, referer, timeout, data, data_size, result, result_headers
+    // For GET requests, we use NULL for data and 0 for data_size
+    string cookie = NULL;
+    string referer = NULL;
+    int timeout = 5000;
+    int res = WebRequest("GET", url, cookie, referer, timeout, data, 0, result, headers);
     
     if(res == -1) {
         int error = GetLastError();

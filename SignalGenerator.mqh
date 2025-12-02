@@ -98,7 +98,10 @@ public:
     bool Initialize(int stochK = 5, int stochD = 3, int stochSlowing = 3,
                    double stochOversold = 20, double stochOverbought = 80,
                    int bbPeriod = 20, double bbDeviation = 2.0,
-                   double slPips = 10, double tpPips = 30);
+                   double slPips = 10, double tpPips = 30,
+                   int htfSwingLeft = 5, int htfSwingRight = 5,
+                   int ltfSwingLeft = 3, int ltfSwingRight = 3,
+                   int maxSwings = 10);
     
     void Update();
     bool GenerateSignal(SignalData &signal);
@@ -149,7 +152,10 @@ CSignalGenerator::~CSignalGenerator(void) {
 bool CSignalGenerator::Initialize(int stochK, int stochD, int stochSlowing,
                                   double stochOversold, double stochOverbought,
                                   int bbPeriod, double bbDeviation,
-                                  double slPips, double tpPips) {
+                                  double slPips, double tpPips,
+                                  int htfSwingLeft, int htfSwingRight,
+                                  int ltfSwingLeft, int ltfSwingRight,
+                                  int maxSwings) {
     
     m_stochKPeriod = stochK;
     m_stochDPeriod = stochD;
@@ -175,10 +181,9 @@ bool CSignalGenerator::Initialize(int stochK, int stochD, int stochSlowing,
         return false;
     }
     
-    // Initialize swing detectors
-    // Note: maxSwings parameter is hardcoded, could be made configurable if needed
-    m_htfSwingDetector = new CSwingDetection(m_symbol, m_htfTimeframe, 5, 5, 10);
-    m_ltfSwingDetector = new CSwingDetection(m_symbol, m_ltfTimeframe, 3, 3, 10);
+    // Initialize swing detectors with configurable parameters
+    m_htfSwingDetector = new CSwingDetection(m_symbol, m_htfTimeframe, htfSwingLeft, htfSwingRight, maxSwings);
+    m_ltfSwingDetector = new CSwingDetection(m_symbol, m_ltfTimeframe, ltfSwingLeft, ltfSwingRight, maxSwings);
     
     if(!m_htfSwingDetector.Initialize() || !m_ltfSwingDetector.Initialize()) {
         Print("Error initializing swing detectors for ", m_symbol);
