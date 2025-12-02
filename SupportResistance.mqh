@@ -66,7 +66,7 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CSupportResistance::CSupportResistance(string symbol, ENUM_TIMEFRAMES timeframe, int maxLevels = 10) {
+CSupportResistance::CSupportResistance(string symbol, ENUM_TIMEFRAMES timeframe, int maxLevels) {
     m_symbol = symbol;
     m_timeframe = timeframe;
     m_maxLevels = maxLevels;

@@ -112,7 +112,7 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CSignalGenerator::CSignalGenerator(string symbol, ENUM_TIMEFRAMES htf = PERIOD_H1, ENUM_TIMEFRAMES ltf = PERIOD_M5) {
+CSignalGenerator::CSignalGenerator(string symbol, ENUM_TIMEFRAMES htf, ENUM_TIMEFRAMES ltf) {
     m_symbol = symbol;
     m_htfTimeframe = htf;
     m_ltfTimeframe = ltf;
@@ -146,10 +146,10 @@ CSignalGenerator::~CSignalGenerator(void) {
 //+------------------------------------------------------------------+
 //| Initialize                                                       |
 //+------------------------------------------------------------------+
-bool CSignalGenerator::Initialize(int stochK = 5, int stochD = 3, int stochSlowing = 3,
-                                  double stochOversold = 20, double stochOverbought = 80,
-                                  int bbPeriod = 20, double bbDeviation = 2.0,
-                                  double slPips = 10, double tpPips = 30) {
+bool CSignalGenerator::Initialize(int stochK, int stochD, int stochSlowing,
+                                  double stochOversold, double stochOverbought,
+                                  int bbPeriod, double bbDeviation,
+                                  double slPips, double tpPips) {
     
     m_stochKPeriod = stochK;
     m_stochDPeriod = stochD;
@@ -237,10 +237,8 @@ bool CSignalGenerator::GenerateSignal(SignalData &signal) {
                     signal.lowestCandle = m_ltfSwingDetector.GetLastLLLowestPrice();
                     signal.stopLoss = signal.lowestCandle - (m_slPips * point);
                     
-                    // TP can be either fixed pips or HTF Lower BB
-                    double htfBBLower = GetBBLower(m_htfBBHandle, 0);
-                    double fixedTP = signal.entryPrice + (m_tpPips * point);
-                    signal.takeProfit = MathMax(fixedTP, htfBBLower);
+                    // TP is fixed pips above entry (HTF BB reference removed to avoid logic errors)
+                    signal.takeProfit = signal.entryPrice + (m_tpPips * point);
                     
                     m_lastSignalTime = TimeCurrent();
                     return true;
@@ -273,10 +271,8 @@ bool CSignalGenerator::GenerateSignal(SignalData &signal) {
                     signal.highestCandle = m_ltfSwingDetector.GetLastHHHighestPrice();
                     signal.stopLoss = signal.highestCandle + (m_slPips * point);
                     
-                    // TP can be either fixed pips or HTF Upper BB
-                    double htfBBUpper = GetBBUpper(m_htfBBHandle, 0);
-                    double fixedTP = signal.entryPrice - (m_tpPips * point);
-                    signal.takeProfit = MathMin(fixedTP, htfBBUpper);
+                    // TP is fixed pips below entry (HTF BB reference removed to avoid logic errors)
+                    signal.takeProfit = signal.entryPrice - (m_tpPips * point);
                     
                     m_lastSignalTime = TimeCurrent();
                     return true;

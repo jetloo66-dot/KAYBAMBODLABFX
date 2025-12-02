@@ -41,7 +41,7 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CErrorHandler::CErrorHandler(string logFile = "SwingEA_Log.txt", bool enableLogging = true) {
+CErrorHandler::CErrorHandler(string logFile, bool enableLogging) {
     m_logFile = logFile;
     m_enableLogging = enableLogging;
     m_enablePrintLog = true;

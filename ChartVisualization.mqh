@@ -64,7 +64,7 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CChartVisualization::CChartVisualization(string symbol, long chartID = 0) {
+CChartVisualization::CChartVisualization(string symbol, long chartID) {
     m_symbol = symbol;
     m_chartID = (chartID == 0) ? ChartID() : chartID;
     m_prefix = "SwingEA_";

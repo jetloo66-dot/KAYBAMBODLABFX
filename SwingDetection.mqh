@@ -87,7 +87,7 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CSwingDetection::CSwingDetection(string symbol, ENUM_TIMEFRAMES timeframe, int leftBars = 5, int rightBars = 5, int maxSwings = 10) {
+CSwingDetection::CSwingDetection(string symbol, ENUM_TIMEFRAMES timeframe, int leftBars, int rightBars, int maxSwings) {
     m_symbol = symbol;
     m_timeframe = timeframe;
     m_leftBars = leftBars;

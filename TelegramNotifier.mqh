@@ -43,7 +43,7 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CTelegramNotifier::CTelegramNotifier(string botToken, string chatID, bool enabled = true) {
+CTelegramNotifier::CTelegramNotifier(string botToken, string chatID, bool enabled) {
     m_botToken = botToken;
     m_chatID = chatID;
     m_enabled = enabled;
@@ -243,8 +243,9 @@ bool CTelegramNotifier::SendHTTPRequest(string message) {
     string headers = ""; // No custom headers needed for GET
     
     ResetLastError();
-    // WebRequest for GET: url, headers, timeout, data (empty), result, response headers
-    int res = WebRequest("GET", url, headers, 5000, data, result, headers);
+    // WebRequest for GET: method, url, headers, timeout, data (empty), result, response_headers
+    string response_headers = "";
+    int res = WebRequest("GET", url, headers, 5000, data, result, response_headers);
     
     if(res == -1) {
         int error = GetLastError();
