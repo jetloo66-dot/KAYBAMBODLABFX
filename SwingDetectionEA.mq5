@@ -15,6 +15,7 @@
 #include "SupportResistance.mqh"
 #include "TelegramNotifier.mqh"
 #include "ChartVisualization.mqh"
+#include "ErrorHandler.mqh"
 
 //+------------------------------------------------------------------+
 //| Input Parameters - Grouped for Optimizer                         |
@@ -112,6 +113,7 @@ input color InpSellColor = clrRed;                      // Sell Signal Color
 CTrade trade;
 CTelegramNotifier* telegram;
 CChartVisualization* chart;
+CErrorHandler* errorHandler;
 
 // Symbol data structures
 struct SymbolData {
@@ -136,6 +138,17 @@ datetime g_dailyPnLReset = 0;
 int OnInit() {
     Print("Initializing Swing Detection EA...");
     
+    // Initialize error handler
+    errorHandler = new CErrorHandler("SwingEA_" + Symbol() + "_Log.txt", true);
+    errorHandler.LogInfo("OnInit", "Starting Swing Detection EA initialization");
+    
+    // Check if trading is allowed
+    if(!errorHandler.CheckAccountTradeAllowed()) {
+        errorHandler.LogError("OnInit", "Trading not allowed on this account");
+        Alert("Swing Detection EA: Trading not allowed!");
+        return INIT_FAILED;
+    }
+    
     // Initialize trade object
     trade.SetExpertMagicNumber(InpMagicNumber);
     trade.SetMarginMode();
@@ -155,11 +168,12 @@ int OnInit() {
     
     // Setup symbols to trade
     if(!SetupSymbols()) {
-        Print("Error: Failed to setup symbols");
+        errorHandler.LogError("OnInit", "Failed to setup symbols");
         return INIT_FAILED;
     }
     
-    Print("Successfully initialized ", ArraySize(g_symbols), " symbols");
+    errorHandler.LogInfo("OnInit", "Successfully initialized " + 
+                        IntegerToString(ArraySize(g_symbols)) + " symbols");
     
     return INIT_SUCCEEDED;
 }
@@ -169,6 +183,10 @@ int OnInit() {
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
     Print("Deinitializing Swing Detection EA. Reason: ", reason);
+    
+    if(errorHandler != NULL) {
+        errorHandler.LogInfo("OnDeinit", "Stopping EA. Reason: " + IntegerToString(reason));
+    }
     
     // Send final notification
     if(telegram != NULL) {
@@ -193,6 +211,12 @@ void OnDeinit(const int reason) {
     if(chart != NULL) {
         delete chart;
         chart = NULL;
+    }
+    
+    // Cleanup error handler
+    if(errorHandler != NULL) {
+        delete errorHandler;
+        errorHandler = NULL;
     }
     
     Comment("");
@@ -270,7 +294,21 @@ void AddSymbolIfEnabled(string symbol, bool enabled) {
     
     // Try to select symbol
     if(!SymbolSelect(symbol, true)) {
-        Print("Warning: Symbol ", symbol, " not available");
+        if(errorHandler != NULL) {
+            errorHandler.LogWarning("AddSymbol", "Symbol " + symbol + " not available");
+        }
+        return;
+    }
+    
+    // Check if symbol trading is allowed
+    if(errorHandler != NULL && !errorHandler.CheckSymbolTradeAllowed(symbol)) {
+        errorHandler.LogWarning("AddSymbol", "Trading not allowed for " + symbol);
+        return;
+    }
+    
+    // Check data availability
+    if(errorHandler != NULL && !errorHandler.CheckDataGap(symbol, InpHTFTimeframe, 100)) {
+        errorHandler.LogWarning("AddSymbol", "Insufficient data for " + symbol);
         return;
     }
     
@@ -289,7 +327,9 @@ void AddSymbolIfEnabled(string symbol, bool enabled) {
                                              InpStochOversold, InpStochOverbought,
                                              InpBBPeriod, InpBBDeviation,
                                              InpSLPips, InpTPPips)) {
-        Print("Error initializing signal generator for ", symbol);
+        if(errorHandler != NULL) {
+            errorHandler.LogError("AddSymbol", "Failed to initialize signal generator for " + symbol);
+        }
         g_symbols[size].enabled = false;
         return;
     }
@@ -342,6 +382,9 @@ void ProcessSymbol(SymbolData &symbolData) {
             }
             
             // Execute trade
+            if(errorHandler != NULL) {
+                errorHandler.LogInfo("ProcessSymbol", "Valid signal detected for " + symbolData.symbol);
+            }
             ExecuteTrade(symbolData, signal);
         }
     }
@@ -350,12 +393,43 @@ void ProcessSymbol(SymbolData &symbolData) {
 }
 
 //+------------------------------------------------------------------+
+//| Handle trade events                                              |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction& trans,
+                        const MqlTradeRequest& request,
+                        const MqlTradeResult& result) {
+    // Log trade events
+    if(trans.type == TRADE_TRANSACTION_DEAL_ADD) {
+        if(PositionSelectByTicket(trans.position)) {
+            string symbol = PositionGetString(POSITION_SYMBOL);
+            double profit = PositionGetDouble(POSITION_PROFIT);
+            
+            if(profit > 0 && telegram != NULL) {
+                telegram.SendTakeProfitHit(symbol, trans.position, profit);
+            }
+            else if(profit < 0 && telegram != NULL) {
+                telegram.SendStopLossHit(symbol, trans.position, MathAbs(profit));
+            }
+            
+            if(errorHandler != NULL) {
+                errorHandler.LogTrade("CLOSE", symbol, 
+                                    PositionGetDouble(POSITION_PRICE_CURRENT),
+                                    PositionGetDouble(POSITION_SL),
+                                    PositionGetDouble(POSITION_TP));
+            }
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
 //| Execute trade based on signal                                    |
 //+------------------------------------------------------------------+
 void ExecuteTrade(SymbolData &symbolData, SignalData &signal) {
     // Validate parameters
     if(!ValidateTradeParameters(symbolData.symbol, signal)) {
-        Print("Trade validation failed for ", symbolData.symbol);
+        if(errorHandler != NULL) {
+            errorHandler.LogWarning("ExecuteTrade", "Trade validation failed for " + symbolData.symbol);
+        }
         return;
     }
     
@@ -411,11 +485,26 @@ void ExecuteTrade(SymbolData &symbolData, SignalData &signal) {
     if(success) {
         symbolData.lastTradeTime = TimeCurrent();
         g_totalTrades++;
+        
+        if(errorHandler != NULL) {
+            errorHandler.LogTrade(
+                (signal.state == STATE_SIGNAL_BUY) ? "BUY" : "SELL",
+                symbolData.symbol, signal.entryPrice, signal.stopLoss, signal.takeProfit
+            );
+        }
     } else {
-        Print("Trade execution failed: ", trade.ResultRetcodeDescription());
+        int errorCode = GetLastError();
+        string errorDesc = trade.ResultRetcodeDescription();
+        
+        if(errorHandler != NULL) {
+            errorHandler.LogError("ExecuteTrade", 
+                                "Trade execution failed for " + symbolData.symbol + ": " + errorDesc,
+                                errorCode);
+        }
+        
         if(telegram != NULL) {
             telegram.SendError("Trade execution failed for " + symbolData.symbol + 
-                             ": " + trade.ResultRetcodeDescription());
+                             ": " + errorDesc);
         }
     }
 }
