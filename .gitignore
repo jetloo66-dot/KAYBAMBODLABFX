@@ -1,0 +1,42 @@
+# MetaTrader compiled files
+*.ex5
+*.ex4
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Backup files
+*.bak
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Test files (except our validation test)
+test_*
+!EA_Validation_Test.mq5
+
+# Build artifacts
+build/
+dist/
+out/
+
+# Logs
+logs/
+*.log
+
+# Cache
+cache/
+*.cache
