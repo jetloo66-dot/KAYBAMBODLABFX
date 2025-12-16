@@ -1,0 +1,29 @@
+{
+    "initial_balance": 10000.0,
+    "trade_amount": 100.0,
+    "trading_pairs": [
+        "EUR/USD",
+        "GBP/USD",
+        "USD/JPY",
+        "AUD/USD",
+        "USD/CAD"
+    ],
+    "risk_level": "MEDIUM",
+    "max_positions": 5,
+    "stop_loss_percent": 2.0,
+    "take_profit_percent": 4.0,
+    "strategy_type": "TREND_FOLLOWING",
+    "timeframe": "1H",
+    "indicators": {
+        "sma_period": 20,
+        "ema_period": 12,
+        "rsi_period": 14,
+        "rsi_oversold": 30,
+        "rsi_overbought": 70
+    },
+    "trading_hours": {
+        "start": "08:00",
+        "end": "17:00",
+        "timezone": "UTC"
+    }
+}
