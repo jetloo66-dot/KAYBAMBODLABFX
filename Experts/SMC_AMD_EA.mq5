@@ -61,6 +61,10 @@ input int    MaxOpenTrades                 = 1;            // Max concurrent tra
 input double SL_BufferPips                 = 5.0;          // SL buffer beyond manipulation level
 input bool   UseTrailingSL                 = true;         // Enable trailing stop
 input double TrailingSLPips                = 15.0;         // Trailing SL distance (pips)
+input int    SlippagePoints                = 20;           // Slippage tolerance (points)
+
+// --- Order Block Settings ---
+input double OB_ImpulseATRMultiplier       = 0.8;          // Min impulse body as multiple of ATR for OB
 
 // --- Session Filter ---
 input bool   UseSessionFilter              = true;         // Enable session filter
@@ -109,8 +113,16 @@ int OnInit()
          " | Entry TF: ", EnumToString(EntryTimeframe));
 
    g_trade.SetExpertMagicNumber(MagicNumber);
-   g_trade.SetDeviationInPoints(20);   // Allow 2 pip slippage
-   g_trade.SetTypeFilling(ORDER_FILLING_FOK);
+   g_trade.SetDeviationInPoints(SlippagePoints);
+
+   // Use broker-supported filling mode (prefer IOC → FOK → Return)
+   ENUM_ORDER_TYPE_FILLING fillMode = ORDER_FILLING_RETURN;
+   long fillingModes = SymbolInfoInteger(Symbol(), SYMBOL_FILLING_MODE);
+   if((fillingModes & SYMBOL_FILLING_IOC) != 0)
+      fillMode = ORDER_FILLING_IOC;
+   if((fillingModes & SYMBOL_FILLING_FOK) != 0)
+      fillMode = ORDER_FILLING_FOK;
+   g_trade.SetTypeFilling(fillMode);
 
    // Reset state
    ResetState();
@@ -271,11 +283,12 @@ void RunStateManipulation()
       g_entryPrice = (g_entryHigh + g_entryLow) / 2.0;
       CalculateSLTP();
 
-      // Validate risk:reward
+      // Validate risk:reward after SL/TP calculation
       double rr = CalculateRR();
       if(rr < MinRiskReward)
       {
-         Print("RR insufficient: ", DoubleToString(rr, 2), " < ", MinRiskReward, " — skipping");
+         Print("RR insufficient: ", DoubleToString(rr, 2), " < ", MinRiskReward, " — resetting state");
+         ResetState();
          return;
       }
 
@@ -549,14 +562,15 @@ bool DetectBullishOB()
       {
          // Check if the NEXT candle (rates[i-1], which is newer) is a strong bullish impulse
          double nextBody = rates[i-1].close - rates[i-1].open;
-         if(nextBody > atrVal * 0.8)   // Impulse body > 80% of ATR
+         // Impulse must: (a) exceed ATR threshold and (b) close above the OB candle high
+         if(nextBody > atrVal * OB_ImpulseATRMultiplier && rates[i-1].close > rates[i].high)
          {
             // OB zone is the high/low of the bearish candle
             g_entryLow  = rates[i].low;
             g_entryHigh = rates[i].high;
 
-            // Must be above the manipulation sweep low
-            if(g_entryLow >= g_manipLevel)
+            // Entire OB must sit above the manipulation sweep low (strict)
+            if(g_entryLow > g_manipLevel)
                return true;
          }
       }
@@ -595,13 +609,14 @@ bool DetectBearishOB()
       {
          // Check if the NEXT (newer) candle is a strong bearish impulse
          double nextBody = rates[i-1].open - rates[i-1].close;
-         if(nextBody > atrVal * 0.8)
+         // Impulse must: (a) exceed ATR threshold and (b) close below the OB candle low
+         if(nextBody > atrVal * OB_ImpulseATRMultiplier && rates[i-1].close < rates[i].low)
          {
             g_entryHigh = rates[i].high;
             g_entryLow  = rates[i].low;
 
-            // Must be below the manipulation sweep high
-            if(g_entryHigh <= g_manipLevel)
+            // Entire OB must sit below the manipulation sweep high (strict)
+            if(g_entryHigh < g_manipLevel)
                return true;
          }
       }
@@ -621,13 +636,9 @@ void CalculateSLTP()
    {
       // SL below the manipulation sweep low with buffer
       g_stopLoss   = g_manipLevel - slBuffer;
-      // TP at least MinRiskReward × SL distance above entry
+      // TP = entry + (SL distance × MinRiskReward) — guarantees minimum RR
       double slDist = g_entryPrice - g_stopLoss;
       g_takeProfit  = g_entryPrice + slDist * MinRiskReward;
-
-      // Respect range high as minimum TP (distribution target)
-      if(g_takeProfit < g_rangeHigh)
-         g_takeProfit = g_rangeHigh;
    }
    else  // SELL
    {
@@ -635,10 +646,6 @@ void CalculateSLTP()
       g_stopLoss   = g_manipLevel + slBuffer;
       double slDist = g_stopLoss - g_entryPrice;
       g_takeProfit  = g_entryPrice - slDist * MinRiskReward;
-
-      // Respect range low as minimum TP (distribution target)
-      if(g_takeProfit > g_rangeLow)
-         g_takeProfit = g_rangeLow;
    }
 }
 
@@ -749,6 +756,7 @@ void ManageOpenTrades()
 
    double pipValue      = GetPipValue();
    double trailDistance = TrailingSLPips * pipValue;
+   double point         = SymbolInfoDouble(Symbol(), SYMBOL_POINT);  // Constant for this symbol
 
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
@@ -765,7 +773,7 @@ void ManageOpenTrades()
          double bid      = SymbolInfoDouble(Symbol(), SYMBOL_BID);
          double newSL    = bid - trailDistance;
          // Only move SL upwards (never widen it)
-         if(newSL > currentSL + SymbolInfoDouble(Symbol(), SYMBOL_POINT))
+         if(newSL > currentSL + point)
          {
             g_trade.PositionModify(ticket, newSL, PositionGetDouble(POSITION_TP));
          }
@@ -775,7 +783,7 @@ void ManageOpenTrades()
          double ask   = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
          double newSL = ask + trailDistance;
          // Only move SL downwards
-         if(newSL < currentSL - SymbolInfoDouble(Symbol(), SYMBOL_POINT) || currentSL == 0)
+         if(newSL < currentSL - point || currentSL == 0)
          {
             g_trade.PositionModify(ticket, newSL, PositionGetDouble(POSITION_TP));
          }
