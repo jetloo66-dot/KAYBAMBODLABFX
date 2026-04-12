@@ -115,13 +115,13 @@ int OnInit()
    g_trade.SetExpertMagicNumber(MagicNumber);
    g_trade.SetDeviationInPoints(SlippagePoints);
 
-   // Use broker-supported filling mode (prefer IOC → FOK → Return)
+   // Determine broker-supported filling mode (prefer FOK → IOC → Return)
    ENUM_ORDER_TYPE_FILLING fillMode = ORDER_FILLING_RETURN;
    long fillingModes = SymbolInfoInteger(Symbol(), SYMBOL_FILLING_MODE);
    if((fillingModes & SYMBOL_FILLING_IOC) != 0)
       fillMode = ORDER_FILLING_IOC;
    if((fillingModes & SYMBOL_FILLING_FOK) != 0)
-      fillMode = ORDER_FILLING_FOK;
+      fillMode = ORDER_FILLING_FOK;   // FOK preferred: ensures full fill or no fill
    g_trade.SetTypeFilling(fillMode);
 
    // Reset state
@@ -671,17 +671,21 @@ double CalculateLotSize()
    double slPips = MathAbs(g_entryPrice - g_stopLoss) / GetPipValue();
    if(slPips <= 0) return 0.01;
 
-   // Monetary value per pip per standard lot
+   // Monetary value per pip per standard lot.
+   // tickValue = account-currency value of one tick movement on 1 lot.
+   // Dividing by tickSize converts to "per point", then multiplying by GetPipValue()
+   // (points per pip) gives account-currency value per pip per lot.
    double tickSize  = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_SIZE);
    double tickValue = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_VALUE);
    double pipValuePerLot = (tickValue / tickSize) * GetPipValue();
    if(pipValuePerLot <= 0) return 0.01;
 
-   double lots = riskAmount / (slPips * pipValuePerLot);
+   // Raw lot size from risk formula: lots = riskAmount / (SL pips × pip value per lot)
+   double rawLots = riskAmount / (slPips * pipValuePerLot);
 
-   // Round to broker step
+   // Round down to broker lot step
    double lotStep = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
-   lots = MathFloor(lots / lotStep) * lotStep;
+   double lots = MathFloor(rawLots / lotStep) * lotStep;
 
    // Clamp to broker limits
    double minLot = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_MIN);
