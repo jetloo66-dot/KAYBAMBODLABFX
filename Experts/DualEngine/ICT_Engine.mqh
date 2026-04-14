@@ -288,8 +288,9 @@ double ICT_DetectLiquidityPool(
          {
             if(MathAbs(highArr[i] - highArr[j]) <= tol)
             {
-               level += highArr[i];
-               count++;
+               // Average both matching levels for a more accurate cluster price
+               level += highArr[i] + highArr[j];
+               count += 2;
                break;
             }
          }
@@ -303,8 +304,8 @@ double ICT_DetectLiquidityPool(
          {
             if(MathAbs(lowArr[i] - lowArr[j]) <= tol)
             {
-               level += lowArr[i];
-               count++;
+               level += lowArr[i] + lowArr[j];
+               count += 2;
                break;
             }
          }

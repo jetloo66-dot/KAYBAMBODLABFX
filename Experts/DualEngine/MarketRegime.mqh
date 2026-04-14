@@ -116,11 +116,13 @@ ENUM_MARKET_REGIME MR_GetMarketRegime(
       CopyLow(symbol,  tf, 1, lookback, lowArr)  < lookback)
       return REGIME_CHOPPY;
 
-   // Identify swing highs and swing lows
+   // Identify swing highs and swing lows (pre-allocate to avoid per-element resize)
    double swingHighs[];
    double swingLows[];
-   ArrayResize(swingHighs, 0);
-   ArrayResize(swingLows,  0);
+   int    shCount = 0;
+   int    slCount = 0;
+   ArrayResize(swingHighs, lookback);
+   ArrayResize(swingLows,  lookback);
 
    int r = swingRadius;
    for(int i = r; i < lookback - r; i++)
@@ -132,13 +134,14 @@ ENUM_MARKET_REGIME MR_GetMarketRegime(
          if(highArr[i] <= highArr[i - j] || highArr[i] <= highArr[i + j]) isSwingHigh = false;
          if(lowArr[i]  >= lowArr[i - j]  || lowArr[i]  >= lowArr[i + j])  isSwingLow  = false;
       }
-      if(isSwingHigh) { int sz = ArraySize(swingHighs); ArrayResize(swingHighs, sz + 1); swingHighs[sz] = highArr[i]; }
-      if(isSwingLow)  { int sz = ArraySize(swingLows);  ArrayResize(swingLows,  sz + 1); swingLows[sz]  = lowArr[i];  }
+      if(isSwingHigh && shCount < ArraySize(swingHighs)) swingHighs[shCount++] = highArr[i];
+      if(isSwingLow  && slCount < ArraySize(swingLows))  swingLows[slCount++]  = lowArr[i];
    }
 
    // Assess structure: check if last 2 swing highs and lows are ascending (uptrend) or descending (downtrend)
+   // swingHighs[0] = most recently confirmed swing high (found first scanning from bar 0 outward)
    bool structureTrending = false;
-   if(ArraySize(swingHighs) >= 2 && ArraySize(swingLows) >= 2)
+   if(shCount >= 2 && slCount >= 2)
    {
       bool hhhl = (swingHighs[0] > swingHighs[1]) && (swingLows[0] > swingLows[1]);  // uptrend structure
       bool lhll = (swingHighs[0] < swingHighs[1]) && (swingLows[0] < swingLows[1]);  // downtrend structure

@@ -246,10 +246,11 @@ bool SMC_DetectAccumulation(
    }
    double avgATR = (validATR > 0) ? sumATR / validATR : atrBuf[0];
 
-   // Legacy ATR check
+   // Legacy ATR check: full swing range must be within ATR multiple
    bool atrOK = (currentRange < atrMultiplier * avgATR);
-   // Adaptive check: current average bar range is small relative to historical
-   bool adaptOK = (avgBarRange > 0.0 && (currentRange / avgBarRange) < adaptiveRatio * bars);
+   // Adaptive check: average bar range of this window is small compared to historical ATR baseline
+   // i.e., individual bars are not moving much — characteristic of accumulation / consolidation
+   bool adaptOK = (avgATR > 0.0 && avgBarRange < adaptiveRatio * avgATR);
    // Body ratio check: mostly small bodies (sideways, not trending)
    bool bodyOK = (avgBodyRatio < maxBodyRatio);
 
