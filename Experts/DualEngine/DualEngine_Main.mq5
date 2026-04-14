@@ -91,6 +91,7 @@ input int    MaxOpenTrades                 = 1;                // Max concurrent
 input int    MagicNumber                   = 234567;           // EA magic number
 input int    SlippagePoints                = 20;               // Slippage tolerance (points)
 input int    MinConfluenceScore            = 40;               // Min confidence score to trade
+input int    ConflictEdgeThreshold         = 20;               // Min score gap needed to trade when engines disagree
 
 // ---- Stop Loss / Trailing / Break-Even ----
 input group "=== STOP LOSS / TRAILING ==="
@@ -373,9 +374,9 @@ SignalResult SelectBestSignal(
       else
       {
          // Conflicting directions: take the higher confidence one,
-         // but only if it exceeds the other by at least 20 points
+         // but only if it exceeds the other by at least ConflictEdgeThreshold points
          int diff = ict.confidence - smc.confidence;
-         if(MathAbs(diff) < 20)
+         if(MathAbs(diff) < ConflictEdgeThreshold)
          {
             SignalResult none;
             none.direction  = 0;

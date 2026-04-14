@@ -48,8 +48,8 @@ enum ENUM_ENGINE_SELECT
    ENGINE_NONE = 3     // No trading (choppy/undefined)
 };
 
-//+------------------------------------------------------------------+
-//|  MR_GetMarketRegime                                              |
+// Minimum ATR ratio below which market is considered choppy (currentATR / avgATR)
+#define MR_CHOPPY_ATR_RATIO  0.7                                              |
 //|  Returns the classified market regime based on ADX and ATR.      |
 //|                                                                  |
 //|  Parameters:                                                     |
@@ -150,7 +150,7 @@ ENUM_MARKET_REGIME MR_GetMarketRegime(
 
    // ---- Classification logic ----
    // 1. Choppy: very low ATR AND no trend structure AND low ADX
-   if(currentATR < avgATR * 0.7 && adx < adxRangeLevel && !structureTrending)
+   if(currentATR < avgATR * MR_CHOPPY_ATR_RATIO && adx < adxRangeLevel && !structureTrending)
       return REGIME_CHOPPY;
 
    // 2. Volatile / Breakout: ATR significantly above average
