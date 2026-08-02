@@ -379,12 +379,12 @@ bool IsBearishEngulfing(const MqlRates &prev,const MqlRates &curr)
    return (IsBullishCandle(prev) && IsBearishCandle(curr) && curr.open>=prev.close && curr.close<=prev.open);
   }
 
-bool IsBullishRejection(const MqlRates rates[],const int index)
+bool IsBullishRejection(const MqlRates &rates[],const int index)
   {
    if(index<=0)
       return false;
 
-   const MqlRates &bar=rates[index];
+   MqlRates bar=rates[index];
    double body=MathAbs(bar.close-bar.open);
    double lower=MathMin(bar.open,bar.close)-bar.low;
    double upper=bar.high-MathMax(bar.open,bar.close);
@@ -392,12 +392,12 @@ bool IsBullishRejection(const MqlRates rates[],const int index)
    return (pin || IsBullishEngulfing(rates[index-1],bar));
   }
 
-bool IsBearishRejection(const MqlRates rates[],const int index)
+bool IsBearishRejection(const MqlRates &rates[],const int index)
   {
    if(index<=0)
       return false;
 
-   const MqlRates &bar=rates[index];
+   MqlRates bar=rates[index];
    double body=MathAbs(bar.close-bar.open);
    double upper=bar.high-MathMax(bar.open,bar.close);
    double lower=MathMin(bar.open,bar.close)-bar.low;
@@ -410,7 +410,7 @@ bool TouchesRange(const MqlRates &bar,const double low,const double high)
    return (bar.low<=high && bar.high>=low);
   }
 
-bool NoBullishGapLeft(const MqlRates rates[],const int fromIndex,const int toIndex)
+bool NoBullishGapLeft(const MqlRates &rates[],const int fromIndex,const int toIndex)
   {
    for(int i=MathMax(fromIndex+1,1);i<=toIndex;i++)
      {
@@ -420,7 +420,7 @@ bool NoBullishGapLeft(const MqlRates rates[],const int fromIndex,const int toInd
    return true;
   }
 
-bool NoBearishGapLeft(const MqlRates rates[],const int fromIndex,const int toIndex)
+bool NoBearishGapLeft(const MqlRates &rates[],const int fromIndex,const int toIndex)
   {
    for(int i=MathMax(fromIndex+1,1);i<=toIndex;i++)
      {
@@ -439,7 +439,7 @@ bool LoadRates(const ENUM_TIMEFRAMES timeframe,MqlRates &rates[],int &count)
    return true;
   }
 
-bool IsPivotHigh(const MqlRates rates[],const int count,const int index)
+bool IsPivotHigh(const MqlRates &rates[],const int count,const int index)
   {
    if(index<InpPivotLeftBars || index>count-1-InpPivotRightBars)
       return false;
@@ -455,7 +455,7 @@ bool IsPivotHigh(const MqlRates rates[],const int count,const int index)
    return true;
   }
 
-bool IsPivotLow(const MqlRates rates[],const int count,const int index)
+bool IsPivotLow(const MqlRates &rates[],const int count,const int index)
   {
    if(index<InpPivotLeftBars || index>count-1-InpPivotRightBars)
       return false;
@@ -471,7 +471,7 @@ bool IsPivotLow(const MqlRates rates[],const int count,const int index)
    return true;
   }
 
-int DetectSwings(const MqlRates rates[],const int count,SwingPoint &swings[])
+int DetectSwings(const MqlRates &rates[],const int count,SwingPoint &swings[])
   {
    ArrayResize(swings,0);
    int detected=0;
@@ -492,7 +492,7 @@ int DetectSwings(const MqlRates rates[],const int count,SwingPoint &swings[])
    return detected;
   }
 
-int FindBullishTargetCandle(const MqlRates rates[],const int p2Index,const int p3Index,double &targetLow,double &targetHigh)
+int FindBullishTargetCandle(const MqlRates &rates[],const int p2Index,const int p3Index,double &targetLow,double &targetHigh)
   {
    targetLow=0.0;
    targetHigh=0.0;
@@ -526,7 +526,7 @@ int FindBullishTargetCandle(const MqlRates rates[],const int p2Index,const int p
    return target;
   }
 
-int FindBearishTargetCandle(const MqlRates rates[],const int p2Index,const int p3Index,double &targetLow,double &targetHigh)
+int FindBearishTargetCandle(const MqlRates &rates[],const int p2Index,const int p3Index,double &targetLow,double &targetHigh)
   {
    targetLow=0.0;
    targetHigh=0.0;
@@ -580,7 +580,7 @@ void FillRiskLevels(StructureSignal &signal)
      }
   }
 
-bool EvaluateBullishModeA(const MqlRates rates[],const int lastCompleted,StructureSignal &signal)
+bool EvaluateBullishModeA(const MqlRates &rates[],const int lastCompleted,StructureSignal &signal)
   {
    signal.signalName="CHOCH/BOS";
    signal.entryPrice=rates[signal.breakoutIndex].close;
@@ -603,7 +603,7 @@ bool EvaluateBullishModeA(const MqlRates rates[],const int lastCompleted,Structu
    return true;
   }
 
-bool EvaluateBearishModeA(const MqlRates rates[],const int lastCompleted,StructureSignal &signal)
+bool EvaluateBearishModeA(const MqlRates &rates[],const int lastCompleted,StructureSignal &signal)
   {
    signal.signalName="CHOCH/BOS";
    signal.entryPrice=rates[signal.breakoutIndex].close;
@@ -626,7 +626,7 @@ bool EvaluateBearishModeA(const MqlRates rates[],const int lastCompleted,Structu
    return true;
   }
 
-bool EvaluateBullishModeB(const MqlRates rates[],const int lastCompleted,StructureSignal &signal)
+bool EvaluateBullishModeB(const MqlRates &rates[],const int lastCompleted,StructureSignal &signal)
   {
    for(int i=signal.breakoutIndex+1;i<=lastCompleted;i++)
      {
@@ -646,7 +646,7 @@ bool EvaluateBullishModeB(const MqlRates rates[],const int lastCompleted,Structu
    return false;
   }
 
-bool EvaluateBearishModeB(const MqlRates rates[],const int lastCompleted,StructureSignal &signal)
+bool EvaluateBearishModeB(const MqlRates &rates[],const int lastCompleted,StructureSignal &signal)
   {
    for(int i=signal.breakoutIndex+1;i<=lastCompleted;i++)
      {
@@ -666,7 +666,7 @@ bool EvaluateBearishModeB(const MqlRates rates[],const int lastCompleted,Structu
    return false;
   }
 
-bool EvaluateBullishModeC(const MqlRates rates[],const int lastCompleted,StructureSignal &signal)
+bool EvaluateBullishModeC(const MqlRates &rates[],const int lastCompleted,StructureSignal &signal)
   {
    for(int i=signal.breakoutIndex+1;i<=lastCompleted;i++)
      {
@@ -688,7 +688,7 @@ bool EvaluateBullishModeC(const MqlRates rates[],const int lastCompleted,Structu
    return false;
   }
 
-bool EvaluateBearishModeC(const MqlRates rates[],const int lastCompleted,StructureSignal &signal)
+bool EvaluateBearishModeC(const MqlRates &rates[],const int lastCompleted,StructureSignal &signal)
   {
    for(int i=signal.breakoutIndex+1;i<=lastCompleted;i++)
      {
@@ -710,7 +710,7 @@ bool EvaluateBearishModeC(const MqlRates rates[],const int lastCompleted,Structu
    return false;
   }
 
-bool DetectBullishSignal(const ENUM_TIMEFRAMES timeframe,const string timeframeName,const ENUM_SMC_ENTRY_MODE mode,const MqlRates rates[],const int count,StructureSignal &signal)
+bool DetectBullishSignal(const ENUM_TIMEFRAMES timeframe,const string timeframeName,const ENUM_SMC_ENTRY_MODE mode,const MqlRates &rates[],const int count,StructureSignal &signal)
   {
    ResetSignal(signal);
    signal.side=SMC_SIDE_BUY;
@@ -789,7 +789,7 @@ bool DetectBullishSignal(const ENUM_TIMEFRAMES timeframe,const string timeframeN
    return false;
   }
 
-bool DetectBearishSignal(const ENUM_TIMEFRAMES timeframe,const string timeframeName,const ENUM_SMC_ENTRY_MODE mode,const MqlRates rates[],const int count,StructureSignal &signal)
+bool DetectBearishSignal(const ENUM_TIMEFRAMES timeframe,const string timeframeName,const ENUM_SMC_ENTRY_MODE mode,const MqlRates &rates[],const int count,StructureSignal &signal)
   {
    ResetSignal(signal);
    signal.side=SMC_SIDE_SELL;
