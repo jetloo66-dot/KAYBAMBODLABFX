@@ -40,6 +40,7 @@ input bool   InpTF_M1_RequireHTFZone = false;
 input ENUM_TIMEFRAMES InpRegimeSource_TF = PERIOD_D1;
 input ENUM_TIMEFRAMES InpConcurrentEntry_MinTF = PERIOD_H1;
 input bool   InpAllowConcurrentTFEntries = true;
+input bool   InpMasterConsolidationOverridesLocal = true;
 
 input group "=== REGIME CLASSIFIER ==="
 input int    InpRegime_SwingCount = 3;
@@ -301,6 +302,10 @@ struct SetupSignal
 struct ManagedPositionState
 {
    ulong  ticket;
+   ulong  positionId;
+   int    engineCode;
+   double realizedProfit;
+   double initialRiskDistance;
    bool   tp1Done;
    bool   tp2Done;
    bool   tp3Done;
@@ -327,13 +332,20 @@ string          g_lastSignalSignature[7];
 datetime        g_lastSignalStamp[7];
 ManagedPositionState g_positionStates[];
 AdaptiveStats   g_adaptiveStats[3];
+int             g_adaptiveOutcomesR[];
+int             g_adaptiveOutcomesT[];
+int             g_adaptiveOutcomesC[];
 int             g_tfCount = 0;
 int             g_magic = 0;
 string          g_objectPrefix = "";
 string          g_dashboardName = "";
 datetime        g_lastChartBarTime = 0;
-datetime        g_governanceStart = 0;
-double          g_governanceBaseEquity = 0.0;
+datetime        g_profitGovernanceStart = 0;
+datetime        g_lossGovernanceStart = 0;
+double          g_profitGovernanceBaseEquity = 0.0;
+double          g_lossGovernanceBaseEquity = 0.0;
+int             g_atrHandles[7];
+int             g_adxHandles[7];
 
 //====================================================================
 // Forward declarations
@@ -377,6 +389,13 @@ void ResetGovernanceWindowIfNeeded();
 void UpdateAdaptiveStatsFromDeal(const ulong dealTicket);
 int GetPositionStateIndex(const ulong ticket);
 RegimeState ResolveMasterState(const RegimeState fallbackState);
+void CancelManagedPendingOrders();
+bool HasOpenManagedPositionId(const ulong positionId);
+datetime SessionAnchorTime(const datetime sourceTime);
+void RecordAdaptiveOutcome(const int idx, const bool win);
+void InitializeIndicatorHandles();
+void ReleaseIndicatorHandles();
+datetime ParseUtcInputTimestamp(const string rawValue);
 
 //====================================================================
 // Lifecycle
@@ -391,6 +410,7 @@ int OnInit()
 
    BuildTFList();
    ResetRuntimeState();
+   InitializeIndicatorHandles();
    ResetGovernanceWindowIfNeeded();
    EventSetTimer(1);
    UpdateRegimes(true);
@@ -401,6 +421,7 @@ int OnInit()
 void OnDeinit(const int reason)
 {
    EventKillTimer();
+   ReleaseIndicatorHandles();
    ClearChartObjects();
 }
 
@@ -408,6 +429,8 @@ void OnTick()
 {
    UpdateRegimes(false);
    ManageOpenPositions();
+   if(IsTradingSuppressed())
+      CancelManagedPendingOrders();
 
    bool shouldScan = InpScanOnTick || InpUseTickLevelScan;
    datetime currentBar = iTime(_Symbol, _Period, 0);
@@ -417,7 +440,7 @@ void OnTick()
       g_lastChartBarTime = currentBar;
    }
 
-   if(shouldScan)
+   if(shouldScan && !IsTradingSuppressed())
       EvaluateSignals();
 
    DrawDashboard();
@@ -427,7 +450,10 @@ void OnTimer()
 {
    UpdateRegimes(false);
    ManageOpenPositions();
-   EvaluateSignals();
+   if(IsTradingSuppressed())
+      CancelManagedPendingOrders();
+   else
+      EvaluateSignals();
    DrawDashboard();
 }
 
@@ -463,6 +489,77 @@ void BuildTFList()
    }
 }
 
+bool HasOpenManagedPositionId(const ulong positionId)
+{
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket))
+         continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol)
+         continue;
+      if((long)PositionGetInteger(POSITION_MAGIC) != g_magic)
+         continue;
+      if((ulong)PositionGetInteger(POSITION_IDENTIFIER) == positionId)
+         return true;
+   }
+   return false;
+}
+
+void RecordAdaptiveOutcome(const int idx, const bool win)
+{
+   int outcome = win ? 1 : -1;
+   int size = 0;
+   if(idx == 1)
+   {
+      size = ArraySize(g_adaptiveOutcomesT);
+      ArrayResize(g_adaptiveOutcomesT, size + 1);
+      g_adaptiveOutcomesT[size] = outcome;
+      if(ArraySize(g_adaptiveOutcomesT) > InpAdaptiveLearning_Window)
+      {
+         for(int i = 1; i < ArraySize(g_adaptiveOutcomesT); i++)
+            g_adaptiveOutcomesT[i - 1] = g_adaptiveOutcomesT[i];
+         ArrayResize(g_adaptiveOutcomesT, ArraySize(g_adaptiveOutcomesT) - 1);
+      }
+      g_adaptiveStats[idx].wins = 0;
+      g_adaptiveStats[idx].losses = 0;
+      for(int i = 0; i < ArraySize(g_adaptiveOutcomesT); i++)
+         if(g_adaptiveOutcomesT[i] > 0) g_adaptiveStats[idx].wins++; else g_adaptiveStats[idx].losses++;
+      return;
+   }
+   if(idx == 2)
+   {
+      size = ArraySize(g_adaptiveOutcomesC);
+      ArrayResize(g_adaptiveOutcomesC, size + 1);
+      g_adaptiveOutcomesC[size] = outcome;
+      if(ArraySize(g_adaptiveOutcomesC) > InpAdaptiveLearning_Window)
+      {
+         for(int i = 1; i < ArraySize(g_adaptiveOutcomesC); i++)
+            g_adaptiveOutcomesC[i - 1] = g_adaptiveOutcomesC[i];
+         ArrayResize(g_adaptiveOutcomesC, ArraySize(g_adaptiveOutcomesC) - 1);
+      }
+      g_adaptiveStats[idx].wins = 0;
+      g_adaptiveStats[idx].losses = 0;
+      for(int i = 0; i < ArraySize(g_adaptiveOutcomesC); i++)
+         if(g_adaptiveOutcomesC[i] > 0) g_adaptiveStats[idx].wins++; else g_adaptiveStats[idx].losses++;
+      return;
+   }
+
+   size = ArraySize(g_adaptiveOutcomesR);
+   ArrayResize(g_adaptiveOutcomesR, size + 1);
+   g_adaptiveOutcomesR[size] = outcome;
+   if(ArraySize(g_adaptiveOutcomesR) > InpAdaptiveLearning_Window)
+   {
+      for(int i = 1; i < ArraySize(g_adaptiveOutcomesR); i++)
+         g_adaptiveOutcomesR[i - 1] = g_adaptiveOutcomesR[i];
+      ArrayResize(g_adaptiveOutcomesR, ArraySize(g_adaptiveOutcomesR) - 1);
+   }
+   g_adaptiveStats[idx].wins = 0;
+   g_adaptiveStats[idx].losses = 0;
+   for(int i = 0; i < ArraySize(g_adaptiveOutcomesR); i++)
+      if(g_adaptiveOutcomesR[i] > 0) g_adaptiveStats[idx].wins++; else g_adaptiveStats[idx].losses++;
+}
+
 void ResetRuntimeState()
 {
    for(int i = 0; i < 7; i++)
@@ -473,6 +570,8 @@ void ResetRuntimeState()
       g_lastTFBarTime[i] = 0;
       g_lastSignalSignature[i] = "";
       g_lastSignalStamp[i] = 0;
+      g_atrHandles[i] = INVALID_HANDLE;
+      g_adxHandles[i] = INVALID_HANDLE;
    }
    ArrayResize(g_positionStates, 0);
    for(int e = 0; e < 3; e++)
@@ -480,6 +579,9 @@ void ResetRuntimeState()
       g_adaptiveStats[e].wins = 0;
       g_adaptiveStats[e].losses = 0;
    }
+   ArrayResize(g_adaptiveOutcomesR, 0);
+   ArrayResize(g_adaptiveOutcomesT, 0);
+   ArrayResize(g_adaptiveOutcomesC, 0);
 }
 
 int TFIndex(const ENUM_TIMEFRAMES tf)
@@ -680,15 +782,47 @@ bool CollectSwings(MqlRates &rates[], SwingPoint &highs[], int &highCount, Swing
    return (highCount > 0 || lowCount > 0);
 }
 
+void InitializeIndicatorHandles()
+{
+   for(int i = 0; i < 7; i++)
+   {
+      if(g_tfList[i] == PERIOD_CURRENT)
+         continue;
+      g_atrHandles[i] = iATR(_Symbol, g_tfList[i], InpATR_Period);
+      g_adxHandles[i] = iADX(_Symbol, g_tfList[i], InpADX_Period);
+   }
+}
+
+void ReleaseIndicatorHandles()
+{
+   for(int i = 0; i < 7; i++)
+   {
+      if(g_atrHandles[i] != INVALID_HANDLE)
+      {
+         IndicatorRelease(g_atrHandles[i]);
+         g_atrHandles[i] = INVALID_HANDLE;
+      }
+      if(g_adxHandles[i] != INVALID_HANDLE)
+      {
+         IndicatorRelease(g_adxHandles[i]);
+         g_adxHandles[i] = INVALID_HANDLE;
+      }
+   }
+}
+
 double GetATRValue(const ENUM_TIMEFRAMES tf, const int period, const int shift)
 {
-   int handle = iATR(_Symbol, tf, period);
+   int idx = TFIndex(tf);
+   int handle = (idx >= 0) ? g_atrHandles[idx] : INVALID_HANDLE;
+   if(handle == INVALID_HANDLE)
+      handle = iATR(_Symbol, tf, period);
    if(handle == INVALID_HANDLE)
       return 0.0;
    double buffer[];
    ArrayResize(buffer, 1);
    int copied = CopyBuffer(handle, 0, shift, 1, buffer);
-   IndicatorRelease(handle);
+   if(idx < 0)
+      IndicatorRelease(handle);
    if(copied != 1)
       return 0.0;
    return buffer[0];
@@ -696,13 +830,17 @@ double GetATRValue(const ENUM_TIMEFRAMES tf, const int period, const int shift)
 
 double GetATRAverage(const ENUM_TIMEFRAMES tf, const int period, const int bars)
 {
-   int handle = iATR(_Symbol, tf, period);
+   int idx = TFIndex(tf);
+   int handle = (idx >= 0) ? g_atrHandles[idx] : INVALID_HANDLE;
+   if(handle == INVALID_HANDLE)
+      handle = iATR(_Symbol, tf, period);
    if(handle == INVALID_HANDLE)
       return 0.0;
    double buffer[];
    ArrayResize(buffer, bars);
    int copied = CopyBuffer(handle, 0, 1, bars, buffer);
-   IndicatorRelease(handle);
+   if(idx < 0)
+      IndicatorRelease(handle);
    if(copied <= 0)
       return 0.0;
    double sum = 0.0;
@@ -713,13 +851,17 @@ double GetATRAverage(const ENUM_TIMEFRAMES tf, const int period, const int bars)
 
 double GetADXValue(const ENUM_TIMEFRAMES tf, const int period, const int shift)
 {
-   int handle = iADX(_Symbol, tf, period);
+   int idx = TFIndex(tf);
+   int handle = (idx >= 0) ? g_adxHandles[idx] : INVALID_HANDLE;
+   if(handle == INVALID_HANDLE)
+      handle = iADX(_Symbol, tf, period);
    if(handle == INVALID_HANDLE)
       return 0.0;
    double buffer[];
    ArrayResize(buffer, 1);
    int copied = CopyBuffer(handle, 0, shift, 1, buffer);
-   IndicatorRelease(handle);
+   if(idx < 0)
+      IndicatorRelease(handle);
    if(copied != 1)
       return 0.0;
    return buffer[0];
@@ -1350,7 +1492,8 @@ RegimeState ClassifyRegime(const ENUM_TIMEFRAMES tf, RegimeSnapshot &snapshot)
    }
 
    ReversalStructure bullRev = DetectReversalStructure(tf, true);
-   if(bullRev.valid && bullRev.originZone.valid && IsPriceInsideZone(CurrentMidPrice(), bullRev.originZone))
+   double tfReferencePrice = rates[1].close;
+   if(bullRev.valid && bullRev.originZone.valid && IsPriceInsideZone(tfReferencePrice, bullRev.originZone))
    {
       snapshot.state = REGIME_REVERSAL_FORMING_BULL;
       snapshot.biasZone = bullRev.originZone;
@@ -1359,7 +1502,7 @@ RegimeState ClassifyRegime(const ENUM_TIMEFRAMES tf, RegimeSnapshot &snapshot)
    }
 
    ReversalStructure bearRev = DetectReversalStructure(tf, false);
-   if(bearRev.valid && bearRev.originZone.valid && IsPriceInsideZone(CurrentMidPrice(), bearRev.originZone))
+   if(bearRev.valid && bearRev.originZone.valid && IsPriceInsideZone(tfReferencePrice, bearRev.originZone))
    {
       snapshot.state = REGIME_REVERSAL_FORMING_BEAR;
       snapshot.biasZone = bearRev.originZone;
@@ -1483,7 +1626,7 @@ bool IsNewsBlackoutActive()
       StringReplace(item, "\t", "");
       if(StringLen(item) == 0)
          continue;
-      datetime eventTime = StringToTime(item);
+      datetime eventTime = ParseUtcInputTimestamp(item);
       if(eventTime <= 0)
          continue;
       if(nowTime >= eventTime - beforeSec && nowTime <= eventTime + afterSec)
@@ -1492,48 +1635,66 @@ bool IsNewsBlackoutActive()
    return false;
 }
 
-void ResetGovernanceWindowIfNeeded()
+bool HasGovernanceWindowRolled(const int mode, const datetime startTime, const datetime nowTime)
 {
-   datetime nowTime = TimeCurrent();
-   if(g_governanceBaseEquity <= 0.0)
-   {
-      g_governanceBaseEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-      g_governanceStart = nowTime;
-      return;
-   }
+   if(mode <= 0 || startTime <= 0)
+      return false;
 
    MqlDateTime nowDt, baseDt;
    TimeToStruct(nowTime, nowDt);
-   TimeToStruct(g_governanceStart, baseDt);
+   TimeToStruct(startTime, baseDt);
 
-   bool reset = false;
-   if(InpProfitTargetMode == 1 || InpLossLimitMode == 1)
-      reset = (nowDt.min != baseDt.min || nowDt.hour != baseDt.hour || nowDt.day != baseDt.day);
-   else if(InpProfitTargetMode == 2 || InpLossLimitMode == 2)
-      reset = (nowDt.hour != baseDt.hour || nowDt.day != baseDt.day);
-   else if(InpProfitTargetMode == 3 || InpLossLimitMode == 3)
-      reset = (nowDt.day != baseDt.day || nowDt.hour < InpSessionStartHour);
-   else if(InpProfitTargetMode == 4 || InpLossLimitMode == 4)
-      reset = (nowDt.day != baseDt.day || nowDt.mon != baseDt.mon || nowDt.year != baseDt.year);
+   if(mode == 1)
+      return (nowDt.min != baseDt.min || nowDt.hour != baseDt.hour || nowDt.day != baseDt.day || nowDt.mon != baseDt.mon || nowDt.year != baseDt.year);
+   if(mode == 2)
+      return (nowDt.hour != baseDt.hour || nowDt.day != baseDt.day || nowDt.mon != baseDt.mon || nowDt.year != baseDt.year);
+   if(mode == 3)
+      return SessionAnchorTime(nowTime) != SessionAnchorTime(startTime);
+   if(mode == 4)
+      return (nowDt.day != baseDt.day || nowDt.mon != baseDt.mon || nowDt.year != baseDt.year);
 
-   if(reset)
+   return false;
+}
+
+void ResetGovernanceWindowIfNeeded()
+{
+   datetime nowTime = TimeCurrent();
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(g_profitGovernanceBaseEquity <= 0.0)
    {
-      g_governanceBaseEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-      g_governanceStart = nowTime;
+      g_profitGovernanceBaseEquity = equity;
+      g_profitGovernanceStart = nowTime;
+   }
+   if(g_lossGovernanceBaseEquity <= 0.0)
+   {
+      g_lossGovernanceBaseEquity = equity;
+      g_lossGovernanceStart = nowTime;
+   }
+
+   if(HasGovernanceWindowRolled(InpProfitTargetMode, g_profitGovernanceStart, nowTime))
+   {
+      g_profitGovernanceBaseEquity = equity;
+      g_profitGovernanceStart = nowTime;
+   }
+   if(HasGovernanceWindowRolled(InpLossLimitMode, g_lossGovernanceStart, nowTime))
+   {
+      g_lossGovernanceBaseEquity = equity;
+      g_lossGovernanceStart = nowTime;
    }
 }
 
 bool IsGovernanceTripped()
 {
-   if(g_governanceBaseEquity <= 0.0)
+   if(g_profitGovernanceBaseEquity <= 0.0 || g_lossGovernanceBaseEquity <= 0.0)
       return false;
 
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-   double pnlPct = (equity - g_governanceBaseEquity) / g_governanceBaseEquity * 100.0;
+   double profitPnlPct = (equity - g_profitGovernanceBaseEquity) / g_profitGovernanceBaseEquity * 100.0;
+   double lossPnlPct = (equity - g_lossGovernanceBaseEquity) / g_lossGovernanceBaseEquity * 100.0;
 
-   if((InpProfitTargetMode > 0) && pnlPct >= InpProfitTargetPercent)
+   if((InpProfitTargetMode > 0) && profitPnlPct >= InpProfitTargetPercent)
       return true;
-   if((InpLossLimitMode > 0) && pnlPct <= -MathAbs(InpLossLimitPercent))
+   if((InpLossLimitMode > 0) && lossPnlPct <= -MathAbs(InpLossLimitPercent))
       return true;
    return false;
 }
@@ -1581,6 +1742,38 @@ double GetAdaptiveThreshold(const EngineType engine, const double baseThreshold)
    if(winRate > 0.60)
       return MathMax(0.0, baseThreshold - InpAdaptiveLearning_ThresholdShift);
    return baseThreshold;
+}
+
+datetime ParseUtcInputTimestamp(const string rawValue)
+{
+   string normalized = rawValue;
+   StringReplace(normalized, "-", ".");
+   StringReplace(normalized, "T", " ");
+   string parts[];
+   if(StringSplit(normalized, ' ', parts) < 2)
+      return 0;
+
+   string dateParts[];
+   string timeParts[];
+   if(StringSplit(parts[0], '.', dateParts) < 3)
+      return 0;
+   if(StringSplit(parts[1], ':', timeParts) < 2)
+      return 0;
+
+   MqlDateTime dt;
+   dt.year = (int)StringToInteger(dateParts[0]);
+   dt.mon  = (int)StringToInteger(dateParts[1]);
+   dt.day  = (int)StringToInteger(dateParts[2]);
+   dt.hour = (int)StringToInteger(timeParts[0]);
+   dt.min  = (int)StringToInteger(timeParts[1]);
+   dt.sec  = (ArraySize(timeParts) > 2) ? (int)StringToInteger(timeParts[2]) : 0;
+
+   datetime asServerSemantic = StructToTime(dt);
+   datetime serverNow = TimeTradeServer();
+   if(serverNow <= 0)
+      serverNow = TimeCurrent();
+   int serverUtcOffset = (int)(serverNow - TimeGMT());
+   return asServerSemantic + serverUtcOffset;
 }
 
 SetupSignal BlankSignal(const ENUM_TIMEFRAMES tf, const EngineType engine, const bool isLong)
@@ -1671,7 +1864,13 @@ SetupSignal BuildReversalSignal(const ENUM_TIMEFRAMES tf, const bool isLong)
    sig.signalTime = s.confirmation.time;
    sig.zoneLabel = s.retraceZone.label;
    sig.reason = isLong ? "Reversal long" : "Reversal short";
-   sig.signature = StringFormat("%s%s%s%I64d", EngineToString(sig.engine), TimeframeToString(tf), isLong ? "B" : "S", (long)s.confirmation.time);
+   sig.signature = StringFormat("%s%s%s%I64d_%.5f_%.5f",
+                                EngineToString(sig.engine),
+                                TimeframeToString(tf),
+                                isLong ? "B" : "S",
+                                (long)s.confirmation.time,
+                                sig.zoneLow,
+                                sig.zoneHigh);
    sig.comment = sig.signature;
 
    sig.aTime1 = s.ll2.time; sig.aPrice1 = s.ll2.price; sig.aLabel1 = "1";
@@ -1748,7 +1947,13 @@ SetupSignal BuildTrendSignal(const ENUM_TIMEFRAMES tf, const bool isLong)
    sig.zoneLabel = s.chosenZone.label;
    sig.reason = s.confirmed ? (isLong ? "Trend long post-BOS" : "Trend short post-BOS")
                             : (isLong ? "Trend long pre-confirm" : "Trend short pre-confirm");
-   sig.signature = StringFormat("%s%s%s%I64d", EngineToString(sig.engine), TimeframeToString(tf), isLong ? "B" : "S", (long)sig.signalTime);
+   sig.signature = StringFormat("%s%s%s%I64d_%.5f_%.5f",
+                                EngineToString(sig.engine),
+                                TimeframeToString(tf),
+                                isLong ? "B" : "S",
+                                (long)sig.signalTime,
+                                sig.zoneLow,
+                                sig.zoneHigh);
    sig.comment = sig.signature;
 
    sig.aTime1 = s.hh1.time; sig.aPrice1 = s.hh1.price; sig.aLabel1 = "HH1";
@@ -1797,7 +2002,8 @@ SetupSignal BuildRangeFadeSignal(const ENUM_TIMEFRAMES tf)
       return longSig;
 
    int idx = TFIndex(tf);
-   if(idx < 0 || g_regimes[idx].state != REGIME_CONSOLIDATING)
+   bool masterConsolidating = (ResolveMasterState(REGIME_UNKNOWN) == REGIME_CONSOLIDATING);
+   if(idx < 0 || (!masterConsolidating && g_regimes[idx].state != REGIME_CONSOLIDATING))
       return longSig;
 
    MqlRates rates[];
@@ -1821,6 +2027,14 @@ SetupSignal BuildRangeFadeSignal(const ENUM_TIMEFRAMES tf)
       return longSig;
 
    bool isLong = doLong;
+   if(doLong && doShort)
+   {
+      double distToLong = MathAbs(price - val);
+      double distToShort = MathAbs(price - vah);
+      if(MathAbs(distToLong - distToShort) <= _Point)
+         return longSig;
+      isLong = (distToLong < distToShort);
+   }
    SetupSignal sig = BlankSignal(tf, ENGINE_CONSOLIDATION, isLong);
    double zoneLow = isLong ? MathMin(val, equalLow > 0.0 ? equalLow : val) - tolerance : MathMin(vah, equalHigh > 0.0 ? equalHigh : vah) - tolerance;
    double zoneHigh = isLong ? MathMax(val, equalLow > 0.0 ? equalLow : val) + tolerance : MathMax(vah, equalHigh > 0.0 ? equalHigh : vah) + tolerance;
@@ -1853,7 +2067,13 @@ SetupSignal BuildRangeFadeSignal(const ENUM_TIMEFRAMES tf)
    sig.signalTime = rates[1].time;
    sig.zoneLabel = zone.label;
    sig.reason = isLong ? "Range fade long" : "Range fade short";
-   sig.signature = StringFormat("%s%s%s%I64d", EngineToString(sig.engine), TimeframeToString(tf), isLong ? "B" : "S", (long)sig.signalTime);
+   sig.signature = StringFormat("%s%s%s%I64d_%.5f_%.5f",
+                                EngineToString(sig.engine),
+                                TimeframeToString(tf),
+                                isLong ? "B" : "S",
+                                (long)sig.signalTime,
+                                sig.zoneLow,
+                                sig.zoneHigh);
    sig.comment = sig.signature;
 
    sig.aTime1 = rates[1].time; sig.aPrice1 = isLong ? val : vah; sig.aLabel1 = isLong ? "VAL" : "VAH";
@@ -1891,6 +2111,8 @@ bool PassesHigherTFZoneRequirement(const int idx)
 
 bool SignalAllowedForCurrentConcurrency(const SetupSignal &sig)
 {
+   // Lower-or-equal timeframes (for example H1 and below when H1 is selected)
+   // are the intended concurrent-entry subset from the original specification.
    if(InpAllowConcurrentTFEntries && PeriodSeconds(sig.tf) <= PeriodSeconds(InpConcurrentEntry_MinTF))
       return true;
    return false;
@@ -1903,7 +2125,10 @@ void EvaluateSignals()
 
    RegimeState masterState = ResolveMasterState(REGIME_UNKNOWN);
 
-   if(masterState == REGIME_CONSOLIDATING && InpConsolidation_StayOut && !InpConsolidation_AllowRangeFade)
+   if(InpMasterConsolidationOverridesLocal &&
+      masterState == REGIME_CONSOLIDATING &&
+      InpConsolidation_StayOut &&
+      !InpConsolidation_AllowRangeFade)
       return;
 
    SetupSignal bestSig = BlankSignal(_Period, ENGINE_NONE, true);
@@ -1919,22 +2144,31 @@ void EvaluateSignals()
          continue;
 
       RegimeState localState = g_regimes[i].state;
+      RegimeState gateState = masterState;
+      if(!InpMasterConsolidationOverridesLocal && masterState == REGIME_CONSOLIDATING)
+         gateState = localState;
       SetupSignal sig = BlankSignal(tf, ENGINE_NONE, true);
 
-      if(masterState == REGIME_CONSOLIDATING)
+      bool masterLocksToConsolidation = (InpMasterConsolidationOverridesLocal && masterState == REGIME_CONSOLIDATING);
+      if(masterLocksToConsolidation)
       {
          if(localState == REGIME_CONSOLIDATING)
             sig = BuildRangeFadeSignal(tf);
       }
+      else if(localState == REGIME_CONSOLIDATING)
+      {
+         if(InpConsolidation_AllowRangeFade)
+            sig = BuildRangeFadeSignal(tf);
+      }
       else if((localState == REGIME_REVERSAL_FORMING_BULL || localState == REGIME_REVERSAL_FORMING_BEAR) &&
               InpEngineR_Enabled &&
-              (!InpEngineR_GateSourceBias || masterState == localState))
+              (!InpEngineR_GateSourceBias || gateState == localState))
       {
          sig = BuildReversalSignal(tf, localState == REGIME_REVERSAL_FORMING_BULL);
       }
       else if((localState == REGIME_TRENDING_UP || localState == REGIME_TRENDING_DOWN) &&
               InpEngineT_Enabled &&
-              (!InpEngineT_GateSourceBias || masterState == localState))
+              (!InpEngineT_GateSourceBias || gateState == localState))
       {
          sig = BuildTrendSignal(tf, localState == REGIME_TRENDING_UP);
       }
@@ -2082,6 +2316,19 @@ bool ValidateSignalPrices(const SetupSignal &sig, const bool usePending, string 
             return false;
          }
       }
+      else
+      {
+         if((ask - sig.sl) < minDist)
+         {
+            why = "market buy SL too close to ask";
+            return false;
+         }
+         if((sig.finalTp - ask) < minDist)
+         {
+            why = "market buy TP too close to ask";
+            return false;
+         }
+      }
    }
    else
    {
@@ -2100,6 +2347,19 @@ bool ValidateSignalPrices(const SetupSignal &sig, const bool usePending, string 
          if(sig.entryPrice <= bid + minDist)
          {
             why = "sell limit must be above bid with stop buffer";
+            return false;
+         }
+      }
+      else
+      {
+         if((sig.sl - bid) < minDist)
+         {
+            why = "market sell SL too close to bid";
+            return false;
+         }
+         if((bid - sig.finalTp) < minDist)
+         {
+            why = "market sell TP too close to bid";
             return false;
          }
       }
@@ -2165,7 +2425,8 @@ bool SubmitSignal(const SetupSignal &sig)
    if(HasExistingManagedSignal(sig))
       return false;
 
-   if(!InpAllowMultiplePositions && CountManagedPositions() >= InpMaxConcurrentPositions)
+   int effectiveMaxPositions = InpAllowMultiplePositions ? MathMax(1, InpMaxConcurrentPositions) : 1;
+   if(CountManagedPositions() >= effectiveMaxPositions)
       return false;
    if(sig.pendingPreferred && CountManagedPendingOrders() >= InpMaxPendingOrders)
       return false;
@@ -2263,11 +2524,30 @@ int GetPositionStateIndex(const ulong ticket)
    {
       if(g_positionStates[i].active && g_positionStates[i].ticket == ticket)
          return i;
+      if(!g_positionStates[i].active)
+      {
+         g_positionStates[i].ticket = ticket;
+         g_positionStates[i].positionId = 0;
+         g_positionStates[i].engineCode = 0;
+         g_positionStates[i].realizedProfit = 0.0;
+         g_positionStates[i].initialRiskDistance = 0.0;
+         g_positionStates[i].tp1Done = false;
+         g_positionStates[i].tp2Done = false;
+         g_positionStates[i].tp3Done = false;
+         g_positionStates[i].tp4Done = false;
+         g_positionStates[i].tp5Done = false;
+         g_positionStates[i].active = true;
+         return i;
+      }
    }
 
    int oldSize = ArraySize(g_positionStates);
    ArrayResize(g_positionStates, oldSize + 1);
    g_positionStates[oldSize].ticket = ticket;
+   g_positionStates[oldSize].positionId = 0;
+   g_positionStates[oldSize].engineCode = 0;
+   g_positionStates[oldSize].realizedProfit = 0.0;
+   g_positionStates[oldSize].initialRiskDistance = 0.0;
    g_positionStates[oldSize].tp1Done = false;
    g_positionStates[oldSize].tp2Done = false;
    g_positionStates[oldSize].tp3Done = false;
@@ -2291,21 +2571,31 @@ bool ModifyPositionSLTP(const ulong ticket, const string symbol, const double sl
    return SendTradeRequest(request, result);
 }
 
-void TryPartialClose(const ulong ticket, const double currentVolume, const double closePercent, const string symbol)
+int TryPartialClose(const ulong ticket, const double currentVolume, const double closePercent, const string symbol)
 {
    if(closePercent <= 0.0 || currentVolume <= 0.0)
-      return;
+      return -1;
 
-   if((ENUM_ACCOUNT_MARGIN_MODE)AccountInfoInteger(ACCOUNT_MARGIN_MODE) != ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
-      return;
-
-   double volumeToClose = NormalizeVolume(currentVolume * closePercent / 100.0);
+   double step = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
+   double desiredVolume = currentVolume * closePercent / 100.0;
+   int stepDigits = VolumeDigitsFromStep(step);
+   double volumeToClose = (step > 0.0) ? MathFloor(desiredVolume / step + 1e-8) * step : desiredVolume;
+   volumeToClose = NormalizeDouble(volumeToClose, stepDigits);
    double minVolume = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
-   if(volumeToClose < minVolume)
-      return;
+   if(volumeToClose <= 0.0 || volumeToClose >= currentVolume)
+      return -1;
+
+   double remainVolume = NormalizeDouble(currentVolume - volumeToClose, stepDigits);
+   if(remainVolume > 0.0 && remainVolume < minVolume)
+      return -1;
+   if(step > 0.0 && remainVolume > 0.0 && MathAbs(MathRound(remainVolume / step) * step - remainVolume) > 1e-8)
+      return -1;
 
    g_trade.SetExpertMagicNumber(g_magic);
-   g_trade.PositionClosePartial(ticket, volumeToClose);
+   g_trade.SetTypeFillingBySymbol(symbol);
+   if(g_trade.PositionClosePartial(ticket, volumeToClose))
+      return 1;
+   return 0;
 }
 
 void ManageOpenPositions()
@@ -2327,11 +2617,27 @@ void ManageOpenPositions()
       double volume = PositionGetDouble(POSITION_VOLUME);
       long type = PositionGetInteger(POSITION_TYPE);
       bool isLong = (type == POSITION_TYPE_BUY);
+      int stateIndex = GetPositionStateIndex(ticket);
+      g_positionStates[stateIndex].positionId = (ulong)PositionGetInteger(POSITION_IDENTIFIER);
+      string posComment = PositionGetString(POSITION_COMMENT);
+      if(StringLen(posComment) > 0)
+      {
+         if(StringGetCharacter(posComment, 0) == 'T')
+            g_positionStates[stateIndex].engineCode = (int)ENGINE_TREND;
+         else if(StringGetCharacter(posComment, 0) == 'C')
+            g_positionStates[stateIndex].engineCode = (int)ENGINE_CONSOLIDATION;
+         else
+            g_positionStates[stateIndex].engineCode = (int)ENGINE_REVERSAL;
+      }
+      if(sl > 0.0 && g_positionStates[stateIndex].initialRiskDistance <= 0.0)
+         g_positionStates[stateIndex].initialRiskDistance = MathAbs(openPrice - sl);
       double risk = MathAbs(openPrice - sl);
       if(risk <= 0.0)
+         risk = g_positionStates[stateIndex].initialRiskDistance;
+      if(risk <= 0.0 && tp > 0.0 && InpTP5Ratio > 0.0)
+         risk = MathAbs(tp - openPrice) / InpTP5Ratio;
+      if(risk <= 0.0)
          continue;
-
-      int stateIndex = GetPositionStateIndex(ticket);
       double progress = isLong ? (currentPrice - openPrice) / risk : (openPrice - currentPrice) / risk;
 
       if(InpUseBreakEven)
@@ -2364,28 +2670,58 @@ void ManageOpenPositions()
       if(progress >= InpTP1Ratio && !g_positionStates[stateIndex].tp1Done)
       {
          double tp1Close = (InpTP1ClosePercent > 0.0) ? InpTP1ClosePercent : (double)InpPartialTP_Ratio;
-         TryPartialClose(ticket, volume, tp1Close, _Symbol);
-         g_positionStates[stateIndex].tp1Done = true;
+         int partialResult = TryPartialClose(ticket, volume, tp1Close, _Symbol);
+         if(partialResult == 1)
+         {
+            g_positionStates[stateIndex].tp1Done = true;
+            continue;
+         }
+         if(partialResult == -1)
+            g_positionStates[stateIndex].tp1Done = true;
       }
       if(progress >= InpTP2Ratio && !g_positionStates[stateIndex].tp2Done)
       {
-         TryPartialClose(ticket, volume, InpTP2ClosePercent, _Symbol);
-         g_positionStates[stateIndex].tp2Done = true;
+         int partialResult = TryPartialClose(ticket, volume, InpTP2ClosePercent, _Symbol);
+         if(partialResult == 1)
+         {
+            g_positionStates[stateIndex].tp2Done = true;
+            continue;
+         }
+         if(partialResult == -1)
+            g_positionStates[stateIndex].tp2Done = true;
       }
       if(progress >= InpTP3Ratio && !g_positionStates[stateIndex].tp3Done)
       {
-         TryPartialClose(ticket, volume, InpTP3ClosePercent, _Symbol);
-         g_positionStates[stateIndex].tp3Done = true;
+         int partialResult = TryPartialClose(ticket, volume, InpTP3ClosePercent, _Symbol);
+         if(partialResult == 1)
+         {
+            g_positionStates[stateIndex].tp3Done = true;
+            continue;
+         }
+         if(partialResult == -1)
+            g_positionStates[stateIndex].tp3Done = true;
       }
       if(progress >= InpTP4Ratio && !g_positionStates[stateIndex].tp4Done)
       {
-         TryPartialClose(ticket, volume, InpTP4ClosePercent, _Symbol);
-         g_positionStates[stateIndex].tp4Done = true;
+         int partialResult = TryPartialClose(ticket, volume, InpTP4ClosePercent, _Symbol);
+         if(partialResult == 1)
+         {
+            g_positionStates[stateIndex].tp4Done = true;
+            continue;
+         }
+         if(partialResult == -1)
+            g_positionStates[stateIndex].tp4Done = true;
       }
       if(progress >= InpTP5Ratio && !g_positionStates[stateIndex].tp5Done)
       {
-         TryPartialClose(ticket, volume, InpTP5ClosePercent, _Symbol);
-         g_positionStates[stateIndex].tp5Done = true;
+         int partialResult = TryPartialClose(ticket, volume, InpTP5ClosePercent, _Symbol);
+         if(partialResult == 1)
+         {
+            g_positionStates[stateIndex].tp5Done = true;
+            continue;
+         }
+         if(partialResult == -1)
+            g_positionStates[stateIndex].tp5Done = true;
       }
    }
 }
@@ -2481,7 +2817,7 @@ void DrawDashboard()
       text += TimeframeToString(g_tfList[i]) + ": " + RegimeToString(g_regimes[i].state) + "\n";
    }
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-   double pnlPct = (g_governanceBaseEquity > 0.0) ? ((equity - g_governanceBaseEquity) / g_governanceBaseEquity * 100.0) : 0.0;
+   double pnlPct = (g_profitGovernanceBaseEquity > 0.0) ? ((equity - g_profitGovernanceBaseEquity) / g_profitGovernanceBaseEquity * 100.0) : 0.0;
    text += "Pos: " + IntegerToString(CountManagedPositions()) + " Pend: " + IntegerToString(CountManagedPendingOrders()) + "\n";
    text += "Gov: " + DoubleToString(pnlPct, 2) + "%";
    ObjectSetString(0, g_dashboardName, OBJPROP_TEXT, text);
@@ -2498,14 +2834,19 @@ void ClearChartObjects()
 string UrlEncode(const string text)
 {
    string out = "";
-   for(int i = 0; i < StringLen(text); i++)
+   uchar bytes[];
+   int count = StringToCharArray(text, bytes, 0, -1, CP_UTF8);
+   if(count <= 0)
+      return out;
+
+   for(int i = 0; i < count - 1; i++)
    {
-      ushort c = StringGetCharacter(text, i);
+      int c = (int)bytes[i];
       if((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.')
-         out += StringSubstr(text, i, 1);
+         out += StringFormat("%c", c);
       else if(c == ' ')
          out += "%20";
-      else if(c == '\n')
+      else if(c == 10)
          out += "%0A";
       else
          out += StringFormat("%%%02X", c);
@@ -2525,15 +2866,15 @@ void SendAlertMessage(const string msg)
    if(StringLen(InpTelegramBotToken) == 0 || StringLen(InpTelegramChatID) == 0)
       return;
 
-   string url = "https://api.telegram.org/bot" + InpTelegramBotToken +
-                "/sendMessage?chat_id=" + InpTelegramChatID +
-                "&text=" + UrlEncode(msg);
+   string url = "https://api.telegram.org/bot" + InpTelegramBotToken + "/sendMessage";
+   string body = "chat_id=" + UrlEncode(InpTelegramChatID) + "&text=" + UrlEncode(msg);
    char data[];
    char result[];
    string resultHeaders = "";
-   string headers = "";
+   string headers = "Content-Type: application/x-www-form-urlencoded\r\n";
+   StringToCharArray(body, data, 0, -1, CP_UTF8);
    ResetLastError();
-   int code = WebRequest("GET", url, headers, 5000, data, result, resultHeaders);
+   int code = WebRequest("POST", url, headers, 5000, data, result, resultHeaders);
    if(code == -1)
       Print("Telegram WebRequest failed: ", GetLastError());
 }
@@ -2542,7 +2883,7 @@ void UpdateAdaptiveStatsFromDeal(const ulong dealTicket)
 {
    if(!InpAdaptiveLearning_Enabled)
       return;
-   if(!HistoryDealSelect(dealTicket))
+   if(!HistorySelect(0, TimeCurrent()))
       return;
    if((long)HistoryDealGetInteger(dealTicket, DEAL_MAGIC) != g_magic)
       return;
@@ -2553,28 +2894,92 @@ void UpdateAdaptiveStatsFromDeal(const ulong dealTicket)
    if(entryType != DEAL_ENTRY_OUT && entryType != DEAL_ENTRY_OUT_BY)
       return;
 
-   string comment = HistoryDealGetString(dealTicket, DEAL_COMMENT);
    double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT) + HistoryDealGetDouble(dealTicket, DEAL_SWAP) + HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+   ulong dealPositionId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+   int engineCode = 0;
+   for(int i = 0; i < ArraySize(g_positionStates); i++)
+   {
+      if(g_positionStates[i].positionId == dealPositionId && g_positionStates[i].active)
+      {
+         engineCode = g_positionStates[i].engineCode;
+         g_positionStates[i].realizedProfit += profit;
+         if(HasOpenManagedPositionId(dealPositionId))
+            return;
+         profit = g_positionStates[i].realizedProfit;
+         g_positionStates[i].active = false;
+         break;
+      }
+   }
 
    int idx = 0;
-   if(StringFind(comment, "T") == 0) idx = 1;
-   else if(StringFind(comment, "C") == 0) idx = 2;
+   if(engineCode == (int)ENGINE_TREND) idx = 1;
+   else if(engineCode == (int)ENGINE_CONSOLIDATION) idx = 2;
 
    if(profit >= 0.0)
-      g_adaptiveStats[idx].wins++;
+      RecordAdaptiveOutcome(idx, true);
    else
-      g_adaptiveStats[idx].losses++;
+      RecordAdaptiveOutcome(idx, false);
+}
 
-   int total = g_adaptiveStats[idx].wins + g_adaptiveStats[idx].losses;
-   if(total > InpAdaptiveLearning_Window)
+void CancelManagedPendingOrders()
+{
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
    {
-      if(g_adaptiveStats[idx].wins > g_adaptiveStats[idx].losses)
-         g_adaptiveStats[idx].wins--;
-      else
-         g_adaptiveStats[idx].losses--;
+      ulong ticket = OrderGetTicket(i);
+      if(ticket == 0)
+         continue;
+      if(OrderGetString(ORDER_SYMBOL) != _Symbol)
+         continue;
+      if((long)OrderGetInteger(ORDER_MAGIC) != g_magic)
+         continue;
+
+      ENUM_ORDER_TYPE type = (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
+      if(type != ORDER_TYPE_BUY_LIMIT && type != ORDER_TYPE_SELL_LIMIT)
+         continue;
+
+      MqlTradeRequest request;
+      MqlTradeResult result;
+      ZeroMemory(request);
+      request.action = TRADE_ACTION_REMOVE;
+      request.order = ticket;
+      request.symbol = _Symbol;
+      request.magic = g_magic;
+      SendTradeRequest(request, result);
    }
 }
 
 //====================================================================
 // End of file
 //====================================================================
+datetime SessionAnchorTime(const datetime sourceTime)
+{
+   MqlDateTime dt;
+   TimeToStruct(sourceTime, dt);
+   dt.min = 0;
+   dt.sec = 0;
+
+   bool overnight = (InpSessionEndHour < InpSessionStartHour);
+   if(overnight)
+   {
+      bool afterMidnightSessionSegment = (dt.hour <= InpSessionEndHour);
+      bool beforeEveningSessionStart = (dt.hour < InpSessionStartHour);
+      if(afterMidnightSessionSegment || beforeEveningSessionStart)
+      {
+         datetime priorDay = StructToTime(dt) - 86400;
+         TimeToStruct(priorDay, dt);
+      }
+   }
+   else
+   {
+      if(dt.hour < InpSessionStartHour)
+      {
+         datetime priorDay = StructToTime(dt) - 86400;
+         TimeToStruct(priorDay, dt);
+      }
+   }
+
+   dt.hour = InpSessionStartHour;
+   dt.min = 0;
+   dt.sec = 0;
+   return StructToTime(dt);
+}
