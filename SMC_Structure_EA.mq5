@@ -175,9 +175,10 @@ void SendTelegramAlert(string msg)
    string payload = "chat_id=" + TelegramChatID + "&text=" + msg;
    char post[];
    char result[];
-   string headers = "Content-Type: application/x-www-form-urlencoded\r\n";
+   string requestHeaders = "Content-Type: application/x-www-form-urlencoded\r\n";
+   string responseHeaders;
    StringToCharArray(payload, post, 0, StringLen(payload));
-   int res = WebRequest("POST", url, headers, 5000, post, result);
+   int res = WebRequest("POST", url, requestHeaders, 5000, post, result, responseHeaders);
    if(res == -1)
       Print("Telegram alert failed: ", GetLastError());
   }
@@ -636,32 +637,6 @@ void DrawSMCObjects(ENUM_TIMEFRAMES tf, SMCSetup &setup)
    ObjectSetInteger(0, prefix + "_LINE", OBJPROP_RAY_RIGHT, true);
   }
 
-void ScanTimeframe(ENUM_TIMEFRAMES tf)
-  {
-   SMCSetup buySetup;
-   SMCSetup sellSetup;
-
-   if(FindBuySMCSetup(tf, buySetup))
-     {
-      DrawSMCObjects(tf, buySetup);
-      double entry = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-      double zoneLevel = buySetup.zoneLow;
-      double sl = CalculateStopLossPrice(true, entry, zoneLevel);
-      double tp = CalculateTakeProfitPrice(true, entry, sl);
-      OpenBuyPosition(entry, sl, tp);
-     }
-
-   if(FindSellSMCSetup(tf, sellSetup))
-     {
-      DrawSMCObjects(tf, sellSetup);
-      double entry = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      double zoneLevel = sellSetup.zoneHigh;
-      double sl = CalculateStopLossPrice(false, entry, zoneLevel);
-      double tp = CalculateTakeProfitPrice(false, entry, sl);
-      OpenSellPosition(entry, sl, tp);
-     }
-  }
-
 //+------------------------------------------------------------------+
 //| Trade risk calculations                                            |
 //+------------------------------------------------------------------+
@@ -732,6 +707,32 @@ bool OpenSellPosition(double entryPrice, double stopLoss, double takeProfit)
    if(ok)
       FireAlert("SELL SIGNAL: " + _Symbol + " Entry=" + DoubleToString(entryPrice,_Digits) + " SL=" + DoubleToString(stopLoss,_Digits) + " TP=" + DoubleToString(takeProfit,_Digits));
    return ok;
+  }
+
+void ScanTimeframe(ENUM_TIMEFRAMES tf)
+  {
+   SMCSetup buySetup;
+   SMCSetup sellSetup;
+
+   if(FindBuySMCSetup(tf, buySetup))
+     {
+      DrawSMCObjects(tf, buySetup);
+      double entry = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double zoneLevel = buySetup.zoneLow;
+      double sl = CalculateStopLossPrice(true, entry, zoneLevel);
+      double tp = CalculateTakeProfitPrice(true, entry, sl);
+      OpenBuyPosition(entry, sl, tp);
+     }
+
+   if(FindSellSMCSetup(tf, sellSetup))
+     {
+      DrawSMCObjects(tf, sellSetup);
+      double entry = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double zoneLevel = sellSetup.zoneHigh;
+      double sl = CalculateStopLossPrice(false, entry, zoneLevel);
+      double tp = CalculateTakeProfitPrice(false, entry, sl);
+      OpenSellPosition(entry, sl, tp);
+     }
   }
 
 //+------------------------------------------------------------------+
