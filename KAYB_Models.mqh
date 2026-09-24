@@ -99,7 +99,7 @@ struct KAYBTradeMemoryRecord
    string setupTag;
    string filterTag;
    double profit;
-   int direction;
+   string direction;
 };
 
 struct KAYBLimitSnapshot

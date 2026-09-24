@@ -115,7 +115,7 @@ void KAYB_AppendMemoryRecord(const KAYBTradeMemoryRecord &rec)
 
 int KAYB_PositionDirectionById(long positionId)
 {
-   if(!HistorySelect(0, TimeCurrent()))
+   if(!HistorySelect(TimeCurrent() - 31536000, TimeCurrent()))
       return 0;
 
    int total = HistoryDealsTotal();
@@ -144,7 +144,7 @@ int KAYB_PositionDirectionById(long positionId)
 
 double KAYB_PositionAggregateProfit(long positionId)
 {
-   if(!HistorySelect(0, TimeCurrent()))
+   if(!HistorySelect(TimeCurrent() - 31536000, TimeCurrent()))
       return 0.0;
 
    double totalProfit = 0.0;
@@ -236,7 +236,8 @@ void KAYB_CaptureDealToMemory(const MqlTradeTransaction &trans)
    rec.symbol = HistoryDealGetString(trans.deal, DEAL_SYMBOL);
    rec.magic = (int)HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
    rec.profit = KAYB_PositionAggregateProfit(positionId);
-   rec.direction = KAYB_PositionDirectionById(positionId);
+   int dir = KAYB_PositionDirectionById(positionId);
+   rec.direction = dir > 0 ? "BUY" : (dir < 0 ? "SELL" : "UNKNOWN");
 
    string comment = HistoryDealGetString(trans.deal, DEAL_COMMENT);
    rec.setupTag = comment;

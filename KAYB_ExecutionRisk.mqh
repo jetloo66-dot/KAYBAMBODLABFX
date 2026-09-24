@@ -126,6 +126,21 @@ void KAYB_ManageOpenPositions(CTrade &trade, int magic)
 {
    static ulong partialTickets[];
    static int partialStage[];
+
+   // cleanup stale tracked tickets
+   for(int k = ArraySize(partialTickets) - 1; k >= 0; --k)
+   {
+      if(!PositionSelectByTicket(partialTickets[k]))
+      {
+         for(int j = k; j < ArraySize(partialTickets) - 1; ++j)
+         {
+            partialTickets[j] = partialTickets[j + 1];
+            partialStage[j] = partialStage[j + 1];
+         }
+         ArrayResize(partialTickets, ArraySize(partialTickets) - 1);
+         ArrayResize(partialStage, ArraySize(partialStage) - 1);
+      }
+   }
    for(int i = PositionsTotal() - 1; i >= 0; --i)
    {
       ulong ticket = PositionGetTicket(i);

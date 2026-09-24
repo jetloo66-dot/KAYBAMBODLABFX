@@ -120,6 +120,8 @@ bool KAYB_UpdateLimitState(KAYBLimitSnapshot &profitSnap, KAYBLimitSnapshot &los
       if(profitSnap.startEquity <= 0.0)
          profitSnap.startEquity = eq;
       double delta = eq - profitSnap.startEquity;
+      if(InpLimitValueMode == KAYB_VALUE_PERCENT && profitSnap.startEquity <= 0.0)
+         return false;
       double metric = (InpLimitValueMode == KAYB_VALUE_PERCENT) ? (delta / profitSnap.startEquity) * 100.0 : delta;
       if(metric >= InpProfitTargetValue)
       {
@@ -140,6 +142,8 @@ bool KAYB_UpdateLimitState(KAYBLimitSnapshot &profitSnap, KAYBLimitSnapshot &los
       if(lossSnap.startEquity <= 0.0)
          lossSnap.startEquity = eq;
       double delta = eq - lossSnap.startEquity;
+      if(InpLimitValueMode == KAYB_VALUE_PERCENT && lossSnap.startEquity <= 0.0)
+         return false;
       double metric = (InpLimitValueMode == KAYB_VALUE_PERCENT) ? (-delta / lossSnap.startEquity) * 100.0 : (-delta);
       if(metric >= InpLossLimitValue)
       {

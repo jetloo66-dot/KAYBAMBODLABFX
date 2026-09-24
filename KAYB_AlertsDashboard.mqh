@@ -53,7 +53,7 @@ void KAYB_SendTelegram(const string message)
    string respHeaders = "";
    StringToCharArray(payload, post, 0, StringLen(payload));
    ResetLastError();
-   int code = WebRequest("POST", url, reqHeaders, 5000, post, result, respHeaders);
+   int code = WebRequest("POST", url, reqHeaders, 5000, post, ArraySize(post) - 1, result, respHeaders);
    if(code == -1)
       Print("KAYB telegram error: ", GetLastError());
 }
