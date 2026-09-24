@@ -23,7 +23,7 @@ double KAYB_CalcLotsFromRisk(const KAYBSetupSignal &sig)
    return KAYB_NormalizeVolume(_Symbol, lots);
 }
 
-bool KAYB_CanPlaceTrade(const KAYBSetupSignal &sig, int magic, string &reason)
+bool KAYB_CanPlaceTrade(const KAYBSetupSignal &sig, int magic, bool asPending, double execPrice, string &reason)
 {
    reason = "";
    if(KAYB_OpenedPositionsByMagic(_Symbol, magic) >= InpMaxPositions)
@@ -46,7 +46,8 @@ bool KAYB_CanPlaceTrade(const KAYBSetupSignal &sig, int magic, string &reason)
 
    int stopLevel = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
    double minStop = stopLevel * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   if(MathAbs(sig.entry - sig.stop) < minStop || MathAbs(sig.tp - sig.entry) < minStop)
+   double basis = asPending ? sig.entry : execPrice;
+   if(MathAbs(basis - sig.stop) < minStop || MathAbs(sig.tp - basis) < minStop)
    {
       reason = "stop level restriction";
       return false;
@@ -58,11 +59,6 @@ bool KAYB_CanPlaceTrade(const KAYBSetupSignal &sig, int magic, string &reason)
 bool KAYB_PlaceSignal(CTrade &trade, const KAYBSetupSignal &sig, int magic)
 {
    string reason;
-   if(!KAYB_CanPlaceTrade(sig, magic, reason))
-   {
-      Print("KAYB place blocked: ", reason);
-      return false;
-   }
 
    trade.SetExpertMagicNumber(magic);
    trade.SetDeviationInPoints(InpDeviationPoints);
@@ -74,12 +70,27 @@ bool KAYB_PlaceSignal(CTrade &trade, const KAYBSetupSignal &sig, int magic)
    {
       double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
       double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      if(sig.isBuy && sig.entry < ask)
-         ok = trade.BuyLimit(lots, NormalizeDouble(sig.entry, _Digits), _Symbol, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), 0, sig.setupTag + " " + sig.filterTag);
-      else if(!sig.isBuy && sig.entry > bid)
-         ok = trade.SellLimit(lots, NormalizeDouble(sig.entry, _Digits), _Symbol, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), 0, sig.setupTag + " " + sig.filterTag);
+      bool usePending = (sig.isBuy && sig.entry < ask) || (!sig.isBuy && sig.entry > bid);
+      if(usePending)
+      {
+         if(!KAYB_CanPlaceTrade(sig, magic, true, sig.entry, reason))
+         {
+            Print("KAYB place blocked: ", reason);
+            return false;
+         }
+         if(sig.isBuy)
+            ok = trade.BuyLimit(lots, NormalizeDouble(sig.entry, _Digits), _Symbol, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), 0, sig.setupTag + " " + sig.filterTag);
+         else
+            ok = trade.SellLimit(lots, NormalizeDouble(sig.entry, _Digits), _Symbol, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), 0, sig.setupTag + " " + sig.filterTag);
+      }
       else if(InpEnableMarketOrders)
       {
+         double marketPrice = sig.isBuy ? ask : bid;
+         if(!KAYB_CanPlaceTrade(sig, magic, false, marketPrice, reason))
+         {
+            Print("KAYB place blocked: ", reason);
+            return false;
+         }
          if(sig.isBuy)
             ok = trade.Buy(lots, _Symbol, 0.0, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), sig.setupTag + " " + sig.filterTag);
          else
@@ -88,6 +99,14 @@ bool KAYB_PlaceSignal(CTrade &trade, const KAYBSetupSignal &sig, int magic)
    }
    else if(InpEnableMarketOrders)
    {
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double marketPrice = sig.isBuy ? ask : bid;
+      if(!KAYB_CanPlaceTrade(sig, magic, false, marketPrice, reason))
+      {
+         Print("KAYB place blocked: ", reason);
+         return false;
+      }
       if(sig.isBuy)
          ok = trade.Buy(lots, _Symbol, 0.0, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), sig.setupTag + " " + sig.filterTag);
       else

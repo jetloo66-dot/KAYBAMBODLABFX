@@ -232,7 +232,20 @@ KAYBSetupSignal KAYB_BuildReversalSignal(const KAYBStructureState &st, const KAY
    sig.tp = target;
    sig.zoneLow = MathMin(ll1, ll2);
    sig.zoneHigh = MathMax(lh2, st.lastBreakLevel);
-   sig.filterTag = (InpFilterCombinationMode == KAYB_FILTER_ANY ? "any" : (InpFilterCombinationMode == KAYB_FILTER_ALL ? "all" : "priority"));
+      string ft = "";
+   string names[4] = {"A","B","C","D"};
+   for(int k = 0; k < 4; ++k)
+   {
+      if(enabled[k] && passed[k])
+      {
+         if(ft != "")
+            ft += "+";
+         ft += names[k];
+      }
+   }
+   if(ft == "")
+      ft = "none";
+   sig.filterTag = ft;
    sig.reason = (isBuy ? "LL2-LH2-LL1 + break" : "HH2-HL2-HH1 + break");
    return sig;
 }

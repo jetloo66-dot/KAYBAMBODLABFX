@@ -2,16 +2,16 @@
 
 This repository now includes a modular, native **MetaTrader 5 Expert Advisor** implementation:
 
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYBAMBODLABFX_MT5_ProductionEA.mq5`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_Models.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_Config.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_Utils.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_StructureEngine.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_SetupEngines.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_ExecutionRisk.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_Filters.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_AlertsDashboard.mqh`
-- `/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX/KAYB_TradeMemory.mqh`
+- `KAYBAMBODLABFX_MT5_ProductionEA.mq5`
+- `KAYB_Models.mqh`
+- `KAYB_Config.mqh`
+- `KAYB_Utils.mqh`
+- `KAYB_StructureEngine.mqh`
+- `KAYB_SetupEngines.mqh`
+- `KAYB_ExecutionRisk.mqh`
+- `KAYB_Filters.mqh`
+- `KAYB_AlertsDashboard.mqh`
+- `KAYB_TradeMemory.mqh`
 
 ## What it implements
 

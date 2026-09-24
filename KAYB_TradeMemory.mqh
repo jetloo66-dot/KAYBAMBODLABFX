@@ -63,6 +63,56 @@ void KAYB_EnsureMemoryFile()
       return;
    }
    FileClose(h);
+   KAYB_PruneMemoryIfNeeded();
+}
+
+
+void KAYB_PruneMemoryIfNeeded()
+{
+   if(!InpTradeMemoryEnabled || InpTradeMemoryMaxRows <= 0)
+      return;
+
+   int h = FileOpen(KAYB_MemoryFile(), FILE_READ | FILE_CSV | FILE_COMMON);
+   if(h == INVALID_HANDLE)
+      return;
+
+   string rows[];
+   while(!FileIsEnding(h))
+   {
+      string c0 = FileReadString(h);
+      string c1 = FileReadString(h);
+      string c2 = FileReadString(h);
+      string c3 = FileReadString(h);
+      string c4 = FileReadString(h);
+      string c5 = FileReadString(h);
+      string c6 = FileReadString(h);
+      string row = c0 + "," + c1 + "," + c2 + "," + c3 + "," + c4 + "," + c5 + "," + c6;
+      int n = ArraySize(rows);
+      ArrayResize(rows, n + 1);
+      rows[n] = row;
+   }
+   FileClose(h);
+
+   if(ArraySize(rows) <= InpTradeMemoryMaxRows + 1)
+      return;
+
+   int start = ArraySize(rows) - (InpTradeMemoryMaxRows + 1);
+   if(start < 1)
+      start = 1;
+
+   int w = FileOpen(KAYB_MemoryFile(), FILE_WRITE | FILE_CSV | FILE_COMMON);
+   if(w == INVALID_HANDLE)
+      return;
+
+   FileWrite(w, "close_time", "symbol", "magic", "setup", "filter", "profit", "direction");
+   for(int i = start; i < ArraySize(rows); ++i)
+   {
+      string parts[];
+      int pc = StringSplit(rows[i], ',', parts);
+      if(pc >= 7)
+         FileWrite(w, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]);
+   }
+   FileClose(w);
 }
 
 void KAYB_AppendMemoryRecord(const KAYBTradeMemoryRecord &rec)
@@ -85,6 +135,7 @@ void KAYB_AppendMemoryRecord(const KAYBTradeMemoryRecord &rec)
              DoubleToString(rec.profit, 2),
              rec.direction);
    FileClose(h);
+   KAYB_PruneMemoryIfNeeded();
 }
 
 bool KAYB_GetMemoryScore(const string symbol, int magic, const string setupTag, const string filterTag, double &score, int &samples)
@@ -147,7 +198,7 @@ void KAYB_CaptureDealToMemory(const MqlTradeTransaction &trans)
       return;
 
    long entryType = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
-   if(entryType != DEAL_ENTRY_OUT)
+   if(entryType != DEAL_ENTRY_OUT && entryType != DEAL_ENTRY_OUT_BY)
       return;
 
    if((int)HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagicNumber)
