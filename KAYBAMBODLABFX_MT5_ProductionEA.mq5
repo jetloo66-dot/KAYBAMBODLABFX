@@ -218,11 +218,8 @@ void OnTimer()
 }
 
 void OnTradeTransaction(const MqlTradeTransaction &trans,
-                        const MqlTradeRequest &request,
-                        const MqlTradeResult &result)
+                        const MqlTradeRequest &,
+                        const MqlTradeResult &)
 {
-   int used = (int)request.action + (int)result.retcode;
-   if(used == -2147483648)
-      Print("unused");
    KAYB_CaptureDealToMemory(trans);
 }

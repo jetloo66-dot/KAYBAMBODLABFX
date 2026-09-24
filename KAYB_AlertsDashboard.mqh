@@ -8,6 +8,21 @@ string KAYB_ObjectPrefix()
 
 datetime g_lastAlertTime = 0;
 
+
+string KAYB_ToSafeAscii(const string text)
+{
+   string out = "";
+   for(int i = 0; i < StringLen(text); ++i)
+   {
+      ushort ch = StringGetCharacter(text, i);
+      if(ch >= 32 && ch <= 126)
+         out += CharToString((uchar)ch);
+      else
+         out += "?";
+   }
+   return out;
+}
+
 string KAYB_UrlEncode(const string text)
 {
    string out = "";
@@ -31,7 +46,7 @@ void KAYB_SendTelegram(const string message)
    if(!InpAlertTelegram || InpTelegramBotToken == "" || InpTelegramChatId == "")
       return;
    string url = "https://api.telegram.org/bot" + InpTelegramBotToken + "/sendMessage";
-   string payload = "chat_id=" + InpTelegramChatId + "&text=" + KAYB_UrlEncode(message);
+   string payload = "chat_id=" + InpTelegramChatId + "&text=" + KAYB_UrlEncode(KAYB_ToSafeAscii(message));
    char post[];
    char result[];
    string reqHeaders = "Content-Type: application/x-www-form-urlencoded\r\n";

@@ -232,7 +232,7 @@ KAYBSetupSignal KAYB_BuildReversalSignal(const KAYBStructureState &st, const KAY
    sig.tp = target;
    sig.zoneLow = MathMin(ll1, ll2);
    sig.zoneHigh = MathMax(lh2, st.lastBreakLevel);
-      string ft = "";
+   string ft = "";
    string names[4] = {"A","B","C","D"};
    for(int k = 0; k < 4; ++k)
    {

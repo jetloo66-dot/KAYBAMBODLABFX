@@ -208,12 +208,15 @@ void KAYB_CaptureDealToMemory(const MqlTradeTransaction &trans)
    if((int)HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagicNumber)
       return;
 
+   long positionId = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
+   if(PositionSelectByTicket((ulong)positionId))
+      return; // position still open (likely partial close), wait for final close
+
    KAYBTradeMemoryRecord rec;
    rec.closeTime = (datetime)HistoryDealGetInteger(trans.deal, DEAL_TIME);
    rec.symbol = HistoryDealGetString(trans.deal, DEAL_SYMBOL);
    rec.magic = (int)HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
    rec.profit = HistoryDealGetDouble(trans.deal, DEAL_PROFIT) + HistoryDealGetDouble(trans.deal, DEAL_SWAP) + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
-   long positionId = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
    rec.direction = KAYB_PositionDirectionById(positionId);
 
    string comment = HistoryDealGetString(trans.deal, DEAL_COMMENT);
