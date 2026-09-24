@@ -40,7 +40,18 @@ for name in REQUIRED:
         ok = False
 
 for p in [ENTRY] + [ROOT / n for n in REQUIRED if (ROOT / n).exists()]:
-    txt = p.read_text(encoding='utf-8')
+    raw = p.read_bytes()
+    txt = None
+    for enc in ('utf-8', 'utf-16', 'utf-16-le', 'utf-16-be', 'latin-1'):
+        try:
+            txt = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            pass
+    if txt is None:
+        print(f'Cannot decode file: {p}')
+        ok = False
+        continue
     if not brace_balance(txt):
         print('Brace imbalance:', p)
         ok = False

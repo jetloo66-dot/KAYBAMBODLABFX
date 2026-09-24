@@ -115,7 +115,7 @@ void KAYB_AppendMemoryRecord(const KAYBTradeMemoryRecord &rec)
 
 int KAYB_PositionDirectionById(long positionId)
 {
-   if(!HistorySelect(TimeCurrent() - 31536000, TimeCurrent()))
+   if(!HistorySelect(0, TimeCurrent()))
       return 0;
 
    int total = HistoryDealsTotal();
@@ -144,7 +144,7 @@ int KAYB_PositionDirectionById(long positionId)
 
 double KAYB_PositionAggregateProfit(long positionId)
 {
-   if(!HistorySelect(TimeCurrent() - 31536000, TimeCurrent()))
+   if(!HistorySelect(0, TimeCurrent()))
       return 0.0;
 
    double totalProfit = 0.0;

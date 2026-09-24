@@ -159,7 +159,19 @@ void KAYB_ProcessSignals()
       KAYBSetupSignal contSig = KAYB_BuildContinuationSignal(stConfirm, g_workflows[i], g_lastContinuationEvent[i]);
       if(contSig.valid && !KAYB_IsDuplicateSignal(i, contSig))
       {
-         if(!blocked && KAYB_PlaceSignal(g_trade, contSig, InpMagicNumber))
+         bool memoryAllowed = true;
+         if(InpUseMemoryScoreFilter)
+         {
+            double score;
+            int samples;
+            if(KAYB_GetMemoryScore(_Symbol, InpMagicNumber, contSig.setupTag, contSig.filterTag, score, samples) && samples >= InpMemoryMinSample)
+            {
+               if(score < InpMemoryScoreThreshold)
+                  memoryAllowed = false;
+            }
+         }
+
+         if(!blocked && memoryAllowed && KAYB_PlaceSignal(g_trade, contSig, InpMagicNumber))
          {
             g_lastSignalTime[i] = contSig.signalTime;
             g_lastContinuationEvent[i] = stConfirm.lastBreakTime;

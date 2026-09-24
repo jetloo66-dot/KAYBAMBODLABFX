@@ -204,9 +204,8 @@ void KAYB_ManageOpenPositions(CTrade &trade, int magic)
             stepLot = minLot;
          double closeVol = KAYB_NormalizeVolume(_Symbol, vol * (stagePct[stage] / 100.0));
          double remainderRaw = vol - closeVol;
-         double remainderNorm = MathFloor(remainderRaw / stepLot) * stepLot;
-         remainderNorm = KAYB_NormalizeVolume(_Symbol, remainderNorm);
-         if(closeVol >= minLot && remainderNorm >= minLot)
+         double remainderStep = MathFloor(remainderRaw / stepLot) * stepLot;
+         if(closeVol >= minLot && remainderStep >= minLot)
             trade.PositionClosePartial(ticket, closeVol);
 
          partialStage[idx] = stage + 1;

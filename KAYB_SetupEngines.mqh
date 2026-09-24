@@ -296,7 +296,7 @@ KAYBSetupSignal KAYB_BuildContinuationSignal(const KAYBStructureState &st, const
    bool isBuy = buyContinuation;
    double entry = retraceCandleOpen;
    double buffer = KAYB_UnitsToPrice(_Symbol, InpStopBufferUnits, InpDistanceMode);
-   double stop = isBuy ? st.hl[0] - buffer : st.lh[0] + buffer;
+   double stop = isBuy ? st.hl[0] - buffer : st.hh[0] + buffer;
    if(InpManualSLUnits > 0.0)
       stop = isBuy ? entry - KAYB_UnitsToPrice(_Symbol, InpManualSLUnits, InpDistanceMode)
                    : entry + KAYB_UnitsToPrice(_Symbol, InpManualSLUnits, InpDistanceMode);
