@@ -66,5 +66,5 @@ Start optimization with:
 - This implementation is designed to avoid look-ahead by using closed-candle confirmation paths.
 - MT5 Economic Calendar availability depends on terminal/account connectivity and broker support.
 - The EA includes deterministic trade-memory statistics only; it does **not** do autonomous model training.
-- This environment cannot run MetaEditor compilation directly; interface/syntax were validated carefully, and final compile should be done in MetaEditor.
+- Compile and run final verification in MetaEditor/MT5 Strategy Tester for your broker environment.
 - No strategy can guarantee profits or “100% accuracy.” Use risk controls and validate thoroughly with your broker’s symbol specifications.

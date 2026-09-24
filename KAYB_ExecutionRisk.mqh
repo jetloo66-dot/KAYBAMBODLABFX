@@ -31,7 +31,7 @@ bool KAYB_CanPlaceTrade(const KAYBSetupSignal &sig, int magic, bool asPending, d
       reason = "max positions reached";
       return false;
    }
-   if(KAYB_PendingOrdersByMagic(_Symbol, magic) >= InpMaxPendingOrders)
+   if(asPending && KAYB_PendingOrdersByMagic(_Symbol, magic) >= InpMaxPendingOrders)
    {
       reason = "max pending orders reached";
       return false;

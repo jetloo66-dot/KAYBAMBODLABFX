@@ -1,16 +1,12 @@
 #property strict
 
-void KAYB_PruneMemoryIfNeeded();
-
 string KAYB_MemoryFile()
 {
    return "KAYBAMBODLABFX_trade_memory.csv";
 }
 
-
-
 bool KAYB_ReadMemoryRow(const int handle,
-                        string &c0,string &c1,string &c2,string &c3,string &c4,string &c5,string &c6)
+                        string &c0, string &c1, string &c2, string &c3, string &c4, string &c5, string &c6)
 {
    if(FileIsEnding(handle)) return false;
    c0 = FileReadString(handle); if(FileIsEnding(handle) && c0 == "") return false;
@@ -21,6 +17,100 @@ bool KAYB_ReadMemoryRow(const int handle,
    if(FileIsEnding(handle)) return false; c5 = FileReadString(handle);
    if(FileIsEnding(handle)) return false; c6 = FileReadString(handle);
    return true;
+}
+
+void KAYB_ResetTradeMemoryIfNeeded()
+{
+   if(!InpTradeMemoryEnabled || !InpTradeMemoryResetOnInit)
+      return;
+   int h = FileOpen(KAYB_MemoryFile(), FILE_WRITE | FILE_CSV | FILE_COMMON);
+   if(h != INVALID_HANDLE)
+   {
+      FileWrite(h, "close_time", "symbol", "magic", "setup", "filter", "profit", "direction");
+      FileClose(h);
+   }
+}
+
+void KAYB_PruneMemoryIfNeeded()
+{
+   if(!InpTradeMemoryEnabled || InpTradeMemoryMaxRows <= 0)
+      return;
+
+   int h = FileOpen(KAYB_MemoryFile(), FILE_READ | FILE_CSV | FILE_COMMON);
+   if(h == INVALID_HANDLE)
+      return;
+
+   string c0s[], c1s[], c2s[], c3s[], c4s[], c5s[], c6s[];
+   string c0, c1, c2, c3, c4, c5, c6;
+   while(KAYB_ReadMemoryRow(h, c0, c1, c2, c3, c4, c5, c6))
+   {
+      int n = ArraySize(c0s);
+      ArrayResize(c0s, n + 1); ArrayResize(c1s, n + 1); ArrayResize(c2s, n + 1);
+      ArrayResize(c3s, n + 1); ArrayResize(c4s, n + 1); ArrayResize(c5s, n + 1); ArrayResize(c6s, n + 1);
+      c0s[n] = c0; c1s[n] = c1; c2s[n] = c2; c3s[n] = c3; c4s[n] = c4; c5s[n] = c5; c6s[n] = c6;
+   }
+   FileClose(h);
+
+   int totalRows = ArraySize(c0s);
+   if(totalRows <= InpTradeMemoryMaxRows + 1)
+      return;
+
+   int startRow = totalRows - (InpTradeMemoryMaxRows + 1);
+   if(startRow < 1)
+      startRow = 1;
+
+   int w = FileOpen(KAYB_MemoryFile(), FILE_WRITE | FILE_CSV | FILE_COMMON);
+   if(w == INVALID_HANDLE)
+      return;
+
+   FileWrite(w, "close_time", "symbol", "magic", "setup", "filter", "profit", "direction");
+   for(int i = startRow; i < totalRows; ++i)
+      FileWrite(w, c0s[i], c1s[i], c2s[i], c3s[i], c4s[i], c5s[i], c6s[i]);
+   FileClose(w);
+}
+
+void KAYB_EnsureMemoryFile()
+{
+   if(!InpTradeMemoryEnabled)
+      return;
+
+   int h = FileOpen(KAYB_MemoryFile(), FILE_READ | FILE_CSV | FILE_COMMON);
+   if(h == INVALID_HANDLE)
+   {
+      h = FileOpen(KAYB_MemoryFile(), FILE_WRITE | FILE_CSV | FILE_COMMON);
+      if(h != INVALID_HANDLE)
+      {
+         FileWrite(h, "close_time", "symbol", "magic", "setup", "filter", "profit", "direction");
+         FileClose(h);
+      }
+      return;
+   }
+   FileClose(h);
+   KAYB_PruneMemoryIfNeeded();
+}
+
+void KAYB_AppendMemoryRecord(const KAYBTradeMemoryRecord &rec)
+{
+   if(!InpTradeMemoryEnabled)
+      return;
+   KAYB_EnsureMemoryFile();
+
+   int h = FileOpen(KAYB_MemoryFile(), FILE_READ | FILE_WRITE | FILE_CSV | FILE_COMMON);
+   if(h == INVALID_HANDLE)
+      return;
+
+   FileSeek(h, 0, SEEK_END);
+   FileWrite(h,
+             TimeToString(rec.closeTime, TIME_DATE | TIME_SECONDS),
+             rec.symbol,
+             rec.magic,
+             rec.setupTag,
+             rec.filterTag,
+             DoubleToString(rec.profit, 2),
+             rec.direction);
+   FileClose(h);
+
+   KAYB_PruneMemoryIfNeeded();
 }
 
 int KAYB_PositionDirectionById(long positionId)
@@ -52,101 +142,30 @@ int KAYB_PositionDirectionById(long positionId)
    return direction;
 }
 
-void KAYB_ResetTradeMemoryIfNeeded()
+double KAYB_PositionAggregateProfit(long positionId)
 {
-   if(!InpTradeMemoryEnabled || !InpTradeMemoryResetOnInit)
-      return;
-   int h = FileOpen(KAYB_MemoryFile(), FILE_WRITE | FILE_CSV | FILE_COMMON);
-   if(h != INVALID_HANDLE)
+   if(!HistorySelect(0, TimeCurrent()))
+      return 0.0;
+
+   double totalProfit = 0.0;
+   int total = HistoryDealsTotal();
+   for(int i = 0; i < total; ++i)
    {
-      FileWrite(h, "close_time", "symbol", "magic", "setup", "filter", "profit", "direction");
-      FileClose(h);
+      ulong dealTicket = HistoryDealGetTicket(i);
+      if(dealTicket == 0)
+         continue;
+      if((long)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID) != positionId)
+         continue;
+
+      long entry = HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY)
+         continue;
+
+      totalProfit += HistoryDealGetDouble(dealTicket, DEAL_PROFIT)
+                  +  HistoryDealGetDouble(dealTicket, DEAL_SWAP)
+                  +  HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
    }
-}
-
-void KAYB_EnsureMemoryFile()
-{
-   if(!InpTradeMemoryEnabled)
-      return;
-   int h = FileOpen(KAYB_MemoryFile(), FILE_READ | FILE_CSV | FILE_COMMON);
-   if(h == INVALID_HANDLE)
-   {
-      h = FileOpen(KAYB_MemoryFile(), FILE_WRITE | FILE_CSV | FILE_COMMON);
-      if(h != INVALID_HANDLE)
-      {
-         FileWrite(h, "close_time", "symbol", "magic", "setup", "filter", "profit", "direction");
-         FileClose(h);
-      }
-      return;
-   }
-   FileClose(h);
-   KAYB_PruneMemoryIfNeeded();
-}
-
-
-void KAYB_PruneMemoryIfNeeded()
-{
-   if(!InpTradeMemoryEnabled || InpTradeMemoryMaxRows <= 0)
-      return;
-
-   int h = FileOpen(KAYB_MemoryFile(), FILE_READ | FILE_CSV | FILE_COMMON);
-   if(h == INVALID_HANDLE)
-      return;
-
-   string rows[];
-   string c0,c1,c2,c3,c4,c5,c6;
-   while(KAYB_ReadMemoryRow(h, c0,c1,c2,c3,c4,c5,c6))
-   {
-      string row = c0 + "," + c1 + "," + c2 + "," + c3 + "," + c4 + "," + c5 + "," + c6;
-      int n = ArraySize(rows);
-      ArrayResize(rows, n + 1);
-      rows[n] = row;
-   }
-   FileClose(h);
-
-   if(ArraySize(rows) <= InpTradeMemoryMaxRows + 1)
-      return;
-
-   int start = ArraySize(rows) - (InpTradeMemoryMaxRows + 1);
-   if(start < 1)
-      start = 1;
-
-   int w = FileOpen(KAYB_MemoryFile(), FILE_WRITE | FILE_CSV | FILE_COMMON);
-   if(w == INVALID_HANDLE)
-      return;
-
-   FileWrite(w, "close_time", "symbol", "magic", "setup", "filter", "profit", "direction");
-   for(int i = start; i < ArraySize(rows); ++i)
-   {
-      string parts[];
-      int pc = StringSplit(rows[i], ',', parts);
-      if(pc >= 7)
-         FileWrite(w, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]);
-   }
-   FileClose(w);
-}
-
-void KAYB_AppendMemoryRecord(const KAYBTradeMemoryRecord &rec)
-{
-   if(!InpTradeMemoryEnabled)
-      return;
-   KAYB_EnsureMemoryFile();
-
-   int h = FileOpen(KAYB_MemoryFile(), FILE_READ | FILE_WRITE | FILE_CSV | FILE_COMMON);
-   if(h == INVALID_HANDLE)
-      return;
-
-   FileSeek(h, 0, SEEK_END);
-   FileWrite(h,
-             TimeToString(rec.closeTime, TIME_DATE | TIME_SECONDS),
-             rec.symbol,
-             rec.magic,
-             rec.setupTag,
-             rec.filterTag,
-             DoubleToString(rec.profit, 2),
-             rec.direction);
-   FileClose(h);
-   KAYB_PruneMemoryIfNeeded();
+   return totalProfit;
 }
 
 bool KAYB_GetMemoryScore(const string symbol, int magic, const string setupTag, const string filterTag, double &score, int &samples)
@@ -162,8 +181,8 @@ bool KAYB_GetMemoryScore(const string symbol, int magic, const string setupTag, 
 
    int row = 0;
    int wins = 0;
-   string closeTime,rowSymbol,rowMagicStr,rowSetup,rowFilter,profitStr,dirStr;
-   while(KAYB_ReadMemoryRow(h, closeTime,rowSymbol,rowMagicStr,rowSetup,rowFilter,profitStr,dirStr))
+   string closeTime, rowSymbol, rowMagicStr, rowSetup, rowFilter, profitStr, dirStr;
+   while(KAYB_ReadMemoryRow(h, closeTime, rowSymbol, rowMagicStr, rowSetup, rowFilter, profitStr, dirStr))
    {
       row++;
       if(row == 1)
@@ -210,13 +229,13 @@ void KAYB_CaptureDealToMemory(const MqlTradeTransaction &trans)
 
    long positionId = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
    if(PositionSelectByTicket((ulong)positionId))
-      return; // position still open (likely partial close), wait for final close
+      return; // still open, likely partial close
 
    KAYBTradeMemoryRecord rec;
    rec.closeTime = (datetime)HistoryDealGetInteger(trans.deal, DEAL_TIME);
    rec.symbol = HistoryDealGetString(trans.deal, DEAL_SYMBOL);
    rec.magic = (int)HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
-   rec.profit = HistoryDealGetDouble(trans.deal, DEAL_PROFIT) + HistoryDealGetDouble(trans.deal, DEAL_SWAP) + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
+   rec.profit = KAYB_PositionAggregateProfit(positionId);
    rec.direction = KAYB_PositionDirectionById(positionId);
 
    string comment = HistoryDealGetString(trans.deal, DEAL_COMMENT);

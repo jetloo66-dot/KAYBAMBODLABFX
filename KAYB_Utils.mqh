@@ -63,7 +63,14 @@ double KAYB_NormalizeVolume(const string symbol, double lots)
       step = 0.01;
    lots = MathMax(minLot, MathMin(maxLot, lots));
    lots = MathFloor(lots / step) * step;
-   return NormalizeDouble(lots, 2);
+   int volDigits = 0;
+   double t = step;
+   while(volDigits < 8 && MathAbs(t - MathRound(t)) > 1e-8)
+   {
+      t *= 10.0;
+      volDigits++;
+   }
+   return NormalizeDouble(lots, volDigits);
 }
 
 int KAYB_OpenedPositionsByMagic(const string symbol, int magic)

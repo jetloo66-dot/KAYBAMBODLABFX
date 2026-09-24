@@ -78,15 +78,15 @@ bool KAYB_FilterC_LastCandleBeforeBreak(const MqlRates &rates[], bool isBuy, dou
 
 bool KAYB_FilterD_Fib(bool isBuy, double ll1, double breakLevel, bool use618, double &target)
 {
-   double a = ll1;
-   double b = breakLevel;
-   if(a == b)
+   double low = MathMin(ll1, breakLevel);
+   double high = MathMax(ll1, breakLevel);
+   if(low == high)
       return false;
    double ratio = use618 ? 0.618 : 0.5;
    if(isBuy)
-      target = b - (b - a) * ratio;
+      target = high - (high - low) * ratio;
    else
-      target = b + (a - b) * ratio;
+      target = low + (high - low) * ratio;
    return true;
 }
 

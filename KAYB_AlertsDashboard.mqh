@@ -122,7 +122,11 @@ void KAYB_ClearVisuals()
 
 void KAYB_DrawSignalZone(const KAYBSetupSignal &sig)
 {
-   string base = KAYB_ObjectPrefix() + "_" + sig.workflowLabel + "_" + IntegerToString((int)sig.signalTime);
+   string ts = TimeToString(sig.signalTime, TIME_DATE|TIME_MINUTES|TIME_SECONDS);
+   StringReplace(ts, ".", "_");
+   StringReplace(ts, ":", "_");
+   StringReplace(ts, " ", "_");
+   string base = KAYB_ObjectPrefix() + "_" + sig.workflowLabel + "_" + ts;
    ObjectCreate(0, base + "_zone", OBJ_RECTANGLE, 0, TimeCurrent(), sig.zoneLow, TimeCurrent() + 3600, sig.zoneHigh);
    ObjectSetInteger(0, base + "_zone", OBJPROP_COLOR, sig.isBuy ? clrGreen : clrTomato);
    ObjectSetInteger(0, base + "_zone", OBJPROP_BACK, true);
