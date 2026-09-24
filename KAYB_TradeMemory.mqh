@@ -1,5 +1,7 @@
 #property strict
 
+void KAYB_PruneMemoryIfNeeded();
+
 string KAYB_MemoryFile()
 {
    return "KAYBAMBODLABFX_trade_memory.csv";

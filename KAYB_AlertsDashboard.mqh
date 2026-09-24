@@ -7,6 +7,23 @@ string KAYB_ObjectPrefix()
 }
 
 datetime g_lastAlertTime = 0;
+
+string KAYB_UrlEncode(const string text)
+{
+   string out = "";
+   for(int i = 0; i < StringLen(text); ++i)
+   {
+      ushort ch = StringGetCharacter(text, i);
+      if((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.')
+         out += CharToString((uchar)ch);
+      else if(ch == ' ')
+         out += "%20";
+      else
+         out += "%" + StringFormat("%02X", (int)ch);
+   }
+   return out;
+}
+
 string g_lastEvent = "";
 
 void KAYB_SendTelegram(const string message)
@@ -14,7 +31,7 @@ void KAYB_SendTelegram(const string message)
    if(!InpAlertTelegram || InpTelegramBotToken == "" || InpTelegramChatId == "")
       return;
    string url = "https://api.telegram.org/bot" + InpTelegramBotToken + "/sendMessage";
-   string payload = "chat_id=" + InpTelegramChatId + "&text=" + message;
+   string payload = "chat_id=" + InpTelegramChatId + "&text=" + KAYB_UrlEncode(message);
    char post[];
    char result[];
    string reqHeaders = "Content-Type: application/x-www-form-urlencoded\r\n";

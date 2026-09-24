@@ -137,7 +137,7 @@ KAYBSetupSignal KAYB_BuildReversalSignal(const KAYBStructureState &st, const KAY
 {
    KAYBSetupSignal sig;
    sig.valid = false;
-   sig.isBuy = (st.chochUp || st.bosUp);
+   sig.isBuy = st.chochUp;
    sig.fromReversal = true;
    sig.setupTag = "EngineA-Reversal";
    sig.filterTag = "";
@@ -148,8 +148,8 @@ KAYBSetupSignal KAYB_BuildReversalSignal(const KAYBStructureState &st, const KAY
    if(!st.valid)
       return sig;
 
-   bool isBuy = (st.chochUp || st.bosUp);
-   bool isSell = (st.chochDown || st.bosDown);
+   bool isBuy = st.chochUp;
+   bool isSell = st.chochDown;
    if(!isBuy && !isSell)
       return sig;
 

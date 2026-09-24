@@ -124,7 +124,8 @@ bool KAYB_PlaceSignal(CTrade &trade, const KAYBSetupSignal &sig, int magic)
 
 void KAYB_ManageOpenPositions(CTrade &trade, int magic)
 {
-   static ulong partialDone[];
+   static ulong partialTickets[];
+   static int partialStage[];
    for(int i = PositionsTotal() - 1; i >= 0; --i)
    {
       ulong ticket = PositionGetTicket(i);
@@ -148,33 +149,47 @@ void KAYB_ManageOpenPositions(CTrade &trade, int magic)
 
       double moveR = isBuy ? (current - open) / risk : (open - current) / risk;
 
-      // Partial close (single-shot per ticket)
-      double triggerR = (InpPartialTrigger == KAYB_PARTIAL_AT_1R ? 1.0 : 0.5);
-      bool alreadyDone = false;
-      for(int pd = 0; pd < ArraySize(partialDone); ++pd)
+      // Staged partial closes using TP1..TP5 settings
+      double stageR[5] = { InpTP1_R, InpTP2_R, InpTP3_R, InpTP4_R, InpTP5_R };
+      double stagePct[5] = { InpTP1_PartialPercent, InpTP2_PartialPercent, InpTP3_PartialPercent, InpTP4_PartialPercent, InpTP5_PartialPercent };
+      bool stageEnabled[5] = { InpTP1Enabled, InpTP2Enabled, InpTP3Enabled, InpTP4Enabled, InpTP5Enabled };
+
+      int idx = -1;
+      for(int pd = 0; pd < ArraySize(partialTickets); ++pd)
       {
-         if(partialDone[pd] == ticket)
+         if(partialTickets[pd] == ticket)
          {
-            alreadyDone = true;
+            idx = pd;
             break;
          }
       }
-      if(!alreadyDone && moveR >= triggerR)
+      if(idx < 0)
       {
+         idx = ArraySize(partialTickets);
+         ArrayResize(partialTickets, idx + 1);
+         ArrayResize(partialStage, idx + 1);
+         partialTickets[idx] = ticket;
+         partialStage[idx] = 0;
+      }
+
+      for(int stage = partialStage[idx]; stage < 5; ++stage)
+      {
+         if(!stageEnabled[stage])
+         {
+            partialStage[idx] = stage + 1;
+            continue;
+         }
+         if(moveR < stageR[stage])
+            break;
+
          double vol = PositionGetDouble(POSITION_VOLUME);
-         double part = vol * (InpTP1_PartialPercent / 100.0);
          double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-         double closeVol = KAYB_NormalizeVolume(_Symbol, part);
+         double closeVol = KAYB_NormalizeVolume(_Symbol, vol * (stagePct[stage] / 100.0));
          double remainder = vol - closeVol;
          if(closeVol >= minLot && remainder >= minLot)
-         {
-            if(trade.PositionClosePartial(ticket, closeVol))
-            {
-               int n = ArraySize(partialDone);
-               ArrayResize(partialDone, n + 1);
-               partialDone[n] = ticket;
-            }
-         }
+            trade.PositionClosePartial(ticket, closeVol);
+
+         partialStage[idx] = stage + 1;
       }
 
       if(InpUseBreakEven && moveR >= InpBreakEvenTriggerR)

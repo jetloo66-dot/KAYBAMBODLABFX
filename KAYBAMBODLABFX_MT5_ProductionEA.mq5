@@ -129,9 +129,6 @@ void KAYB_ProcessSignals()
       }
       if(revSig.valid && !KAYB_IsDuplicateSignal(i, revSig))
       {
-         KAYB_DrawSignalZone(revSig);
-         KAYB_Notify(revSig.workflowLabel + " " + KAYB_SideToString(revSig.isBuy) + " reversal setup " + revSig.filterTag);
-
          if(!blocked)
          {
             if(InpUseMemoryScoreFilter)
@@ -152,7 +149,8 @@ void KAYB_ProcessSignals()
             {
                g_lastSignalTime[i] = revSig.signalTime;
                g_lastContinuationEvent[i] = stConfirm.lastBreakTime;
-               KAYB_Notify("Order placed: " + revSig.workflowLabel + " " + KAYB_SideToString(revSig.isBuy) + " " + revSig.setupTag);
+               KAYB_DrawSignalZone(revSig);
+               KAYB_Notify("Order placed: " + revSig.workflowLabel + " " + KAYB_SideToString(revSig.isBuy) + " " + revSig.setupTag + " " + revSig.filterTag);
             }
          }
       }
@@ -161,13 +159,11 @@ void KAYB_ProcessSignals()
       KAYBSetupSignal contSig = KAYB_BuildContinuationSignal(stConfirm, g_workflows[i], g_lastContinuationEvent[i]);
       if(contSig.valid && !KAYB_IsDuplicateSignal(i, contSig))
       {
-         KAYB_DrawSignalZone(contSig);
-         KAYB_Notify(contSig.workflowLabel + " " + KAYB_SideToString(contSig.isBuy) + " continuation setup");
-
          if(!blocked && KAYB_PlaceSignal(g_trade, contSig, InpMagicNumber))
          {
             g_lastSignalTime[i] = contSig.signalTime;
             g_lastContinuationEvent[i] = stConfirm.lastBreakTime;
+            KAYB_DrawSignalZone(contSig);
             KAYB_Notify("Order placed: " + contSig.workflowLabel + " " + KAYB_SideToString(contSig.isBuy) + " " + contSig.setupTag);
          }
       }

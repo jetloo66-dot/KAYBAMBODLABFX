@@ -117,7 +117,7 @@ KAYBStructureState KAYB_BuildStructureState(ENUM_TIMEFRAMES tf)
    else if(downSeq)
       st.trend = KAYB_TREND_DOWN;
 
-   int confirmShift = InpCloseBreakRequired ? 1 : 0;
+   int confirmShift = 1; // confirmed closed candle only for deterministic structure events
    double tolerance = KAYB_UnitsToPrice(_Symbol, InpSwingToleranceUnits, InpDistanceMode);
    double closePrice = rates[confirmShift].close;
 
