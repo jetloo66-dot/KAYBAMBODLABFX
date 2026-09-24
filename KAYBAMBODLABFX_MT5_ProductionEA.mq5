@@ -120,6 +120,13 @@ void KAYB_ProcessSignals()
 
       // Reversal engine
       KAYBSetupSignal revSig = KAYB_BuildReversalSignal(stConfirm, g_workflows[i]);
+      if(revSig.valid)
+      {
+         bool analysisAllowsLong = (stAnalysis.trend != KAYB_TREND_DOWN);
+         bool analysisAllowsShort = (stAnalysis.trend != KAYB_TREND_UP);
+         if((revSig.isBuy && !analysisAllowsLong) || (!revSig.isBuy && !analysisAllowsShort))
+            revSig.valid = false;
+      }
       if(revSig.valid && !KAYB_IsDuplicateSignal(i, revSig))
       {
          KAYB_DrawSignalZone(revSig);

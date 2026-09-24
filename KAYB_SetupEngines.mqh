@@ -92,6 +92,18 @@ bool KAYB_FilterD_Fib(bool isBuy, double ll1, double breakLevel, bool use618, do
 
 bool KAYB_EvaluateFilterSelection(const bool enabledFlags[], const bool passedFlags[], int total)
 {
+   bool anyEnabled = false;
+   for(int i = 0; i < total; ++i)
+   {
+      if(enabledFlags[i])
+      {
+         anyEnabled = true;
+         break;
+      }
+   }
+   if(!anyEnabled)
+      return true;
+
    if(InpFilterCombinationMode == KAYB_FILTER_ANY)
    {
       for(int i = 0; i < total; ++i)

@@ -72,10 +72,19 @@ bool KAYB_PlaceSignal(CTrade &trade, const KAYBSetupSignal &sig, int magic)
 
    if(InpEnablePendingOrders && InpUsePendingOrders)
    {
-      if(sig.isBuy)
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      if(sig.isBuy && sig.entry < ask)
          ok = trade.BuyLimit(lots, NormalizeDouble(sig.entry, _Digits), _Symbol, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), 0, sig.setupTag + " " + sig.filterTag);
-      else
+      else if(!sig.isBuy && sig.entry > bid)
          ok = trade.SellLimit(lots, NormalizeDouble(sig.entry, _Digits), _Symbol, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), 0, sig.setupTag + " " + sig.filterTag);
+      else if(InpEnableMarketOrders)
+      {
+         if(sig.isBuy)
+            ok = trade.Buy(lots, _Symbol, 0.0, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), sig.setupTag + " " + sig.filterTag);
+         else
+            ok = trade.Sell(lots, _Symbol, 0.0, NormalizeDouble(sig.stop, _Digits), NormalizeDouble(sig.tp, _Digits), sig.setupTag + " " + sig.filterTag);
+      }
    }
    else if(InpEnableMarketOrders)
    {

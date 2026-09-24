@@ -131,7 +131,7 @@ KAYBStructureState KAYB_BuildStructureState(ENUM_TIMEFRAMES tf)
       st.lastBreakLevel = recentHigh;
       st.lastBreakTime = rates[confirmShift].time;
    }
-   if(recentLow > 0.0 && closePrice < (recentLow - tolerance))
+   else if(recentLow > 0.0 && closePrice < (recentLow - tolerance))
    {
       st.bosDown = (st.trend == KAYB_TREND_DOWN);
       st.chochDown = (st.trend == KAYB_TREND_UP || st.trend == KAYB_TREND_NONE);

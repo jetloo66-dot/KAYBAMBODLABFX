@@ -5,6 +5,36 @@ string KAYB_MemoryFile()
    return "KAYBAMBODLABFX_trade_memory.csv";
 }
 
+
+int KAYB_PositionDirectionById(long positionId)
+{
+   if(!HistorySelect(0, TimeCurrent()))
+      return 0;
+
+   int total = HistoryDealsTotal();
+   datetime bestTime = 0;
+   int direction = 0;
+   for(int i = 0; i < total; ++i)
+   {
+      ulong dealTicket = HistoryDealGetTicket(i);
+      if(dealTicket == 0)
+         continue;
+      if((long)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID) != positionId)
+         continue;
+      long entry = HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_IN)
+         continue;
+      datetime t = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
+      if(t >= bestTime)
+      {
+         bestTime = t;
+         long dealType = HistoryDealGetInteger(dealTicket, DEAL_TYPE);
+         direction = (dealType == DEAL_TYPE_BUY) ? 1 : -1;
+      }
+   }
+   return direction;
+}
+
 void KAYB_ResetTradeMemoryIfNeeded()
 {
    if(!InpTradeMemoryEnabled || !InpTradeMemoryResetOnInit)
@@ -74,14 +104,18 @@ bool KAYB_GetMemoryScore(const string symbol, int magic, const string setupTag, 
    {
       string closeTime = FileReadString(h);
       string rowSymbol = FileReadString(h);
-      int rowMagic = (int)FileReadNumber(h);
+      string rowMagicStr = FileReadString(h);
       string rowSetup = FileReadString(h);
       string rowFilter = FileReadString(h);
-      double profit = FileReadNumber(h);
-      int dir = (int)FileReadNumber(h);
+      string profitStr = FileReadString(h);
+      string dirStr = FileReadString(h);
       row++;
       if(row == 1)
          continue;
+
+      int rowMagic = (int)StringToInteger(rowMagicStr);
+      double profit = StringToDouble(profitStr);
+      int dir = (int)StringToInteger(dirStr);
 
       if(rowSymbol != symbol || rowMagic != magic)
          continue;
@@ -124,7 +158,8 @@ void KAYB_CaptureDealToMemory(const MqlTradeTransaction &trans)
    rec.symbol = HistoryDealGetString(trans.deal, DEAL_SYMBOL);
    rec.magic = (int)HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
    rec.profit = HistoryDealGetDouble(trans.deal, DEAL_PROFIT) + HistoryDealGetDouble(trans.deal, DEAL_SWAP) + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
-   rec.direction = (HistoryDealGetInteger(trans.deal, DEAL_TYPE) == DEAL_TYPE_BUY ? 1 : -1);
+   long positionId = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
+   rec.direction = KAYB_PositionDirectionById(positionId);
 
    string comment = HistoryDealGetString(trans.deal, DEAL_COMMENT);
    rec.setupTag = comment;

@@ -17,10 +17,11 @@ void KAYB_SendTelegram(const string message)
    string payload = "chat_id=" + InpTelegramChatId + "&text=" + message;
    char post[];
    char result[];
-   string headers = "Content-Type: application/x-www-form-urlencoded\r\n";
+   string reqHeaders = "Content-Type: application/x-www-form-urlencoded\r\n";
+   string respHeaders = "";
    StringToCharArray(payload, post, 0, StringLen(payload));
    ResetLastError();
-   int code = WebRequest("POST", url, headers, 5000, post, result, headers);
+   int code = WebRequest("POST", url, reqHeaders, 5000, post, result, respHeaders);
    if(code == -1)
       Print("KAYB telegram error: ", GetLastError());
 }

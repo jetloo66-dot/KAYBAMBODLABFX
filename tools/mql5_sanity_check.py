@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys
 
-ROOT = Path('/home/runner/work/KAYBAMBODLABFX/KAYBAMBODLABFX')
+ROOT = Path(__file__).resolve().parent.parent
 ENTRY = ROOT / 'KAYBAMBODLABFX_MT5_ProductionEA.mq5'
 
 REQUIRED = [
