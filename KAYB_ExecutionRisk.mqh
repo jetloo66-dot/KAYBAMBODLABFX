@@ -164,9 +164,11 @@ void KAYB_ManageOpenPositions(CTrade &trade, int magic)
          double vol = PositionGetDouble(POSITION_VOLUME);
          double part = vol * (InpTP1_PartialPercent / 100.0);
          double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-         if(part >= minLot)
+         double closeVol = KAYB_NormalizeVolume(_Symbol, part);
+         double remainder = vol - closeVol;
+         if(closeVol >= minLot && remainder >= minLot)
          {
-            if(trade.PositionClosePartial(ticket, KAYB_NormalizeVolume(_Symbol, part)))
+            if(trade.PositionClosePartial(ticket, closeVol))
             {
                int n = ArraySize(partialDone);
                ArrayResize(partialDone, n + 1);

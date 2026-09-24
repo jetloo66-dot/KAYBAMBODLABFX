@@ -76,7 +76,7 @@ bool KAYB_IsDuplicateSignal(int idx, const KAYBSetupSignal &sig)
 {
    if(g_lastSignalTime[idx] == 0)
       return false;
-   return (MathAbs((double)(sig.signalTime - g_lastSignalTime[idx])) < 5.0);
+   return (sig.signalTime == g_lastSignalTime[idx]);
 }
 
 bool KAYB_EntryBlocked(string &reason)
@@ -225,5 +225,8 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
 {
+   int used = (int)request.action + (int)result.retcode;
+   if(used == -2147483648)
+      Print("unused");
    KAYB_CaptureDealToMemory(trans);
 }

@@ -6,6 +6,21 @@ string KAYB_MemoryFile()
 }
 
 
+
+bool KAYB_ReadMemoryRow(const int handle,
+                        string &c0,string &c1,string &c2,string &c3,string &c4,string &c5,string &c6)
+{
+   if(FileIsEnding(handle)) return false;
+   c0 = FileReadString(handle); if(FileIsEnding(handle) && c0 == "") return false;
+   if(FileIsEnding(handle)) return false; c1 = FileReadString(handle);
+   if(FileIsEnding(handle)) return false; c2 = FileReadString(handle);
+   if(FileIsEnding(handle)) return false; c3 = FileReadString(handle);
+   if(FileIsEnding(handle)) return false; c4 = FileReadString(handle);
+   if(FileIsEnding(handle)) return false; c5 = FileReadString(handle);
+   if(FileIsEnding(handle)) return false; c6 = FileReadString(handle);
+   return true;
+}
+
 int KAYB_PositionDirectionById(long positionId)
 {
    if(!HistorySelect(0, TimeCurrent()))
@@ -77,15 +92,9 @@ void KAYB_PruneMemoryIfNeeded()
       return;
 
    string rows[];
-   while(!FileIsEnding(h))
+   string c0,c1,c2,c3,c4,c5,c6;
+   while(KAYB_ReadMemoryRow(h, c0,c1,c2,c3,c4,c5,c6))
    {
-      string c0 = FileReadString(h);
-      string c1 = FileReadString(h);
-      string c2 = FileReadString(h);
-      string c3 = FileReadString(h);
-      string c4 = FileReadString(h);
-      string c5 = FileReadString(h);
-      string c6 = FileReadString(h);
       string row = c0 + "," + c1 + "," + c2 + "," + c3 + "," + c4 + "," + c5 + "," + c6;
       int n = ArraySize(rows);
       ArrayResize(rows, n + 1);
@@ -151,22 +160,15 @@ bool KAYB_GetMemoryScore(const string symbol, int magic, const string setupTag, 
 
    int row = 0;
    int wins = 0;
-   while(!FileIsEnding(h))
+   string closeTime,rowSymbol,rowMagicStr,rowSetup,rowFilter,profitStr,dirStr;
+   while(KAYB_ReadMemoryRow(h, closeTime,rowSymbol,rowMagicStr,rowSetup,rowFilter,profitStr,dirStr))
    {
-      string closeTime = FileReadString(h);
-      string rowSymbol = FileReadString(h);
-      string rowMagicStr = FileReadString(h);
-      string rowSetup = FileReadString(h);
-      string rowFilter = FileReadString(h);
-      string profitStr = FileReadString(h);
-      string dirStr = FileReadString(h);
       row++;
       if(row == 1)
          continue;
 
       int rowMagic = (int)StringToInteger(rowMagicStr);
       double profit = StringToDouble(profitStr);
-      int dir = (int)StringToInteger(dirStr);
 
       if(rowSymbol != symbol || rowMagic != magic)
          continue;

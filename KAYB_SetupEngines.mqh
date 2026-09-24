@@ -32,7 +32,7 @@ bool KAYB_FilterB_EngulfZone(const MqlRates &rates[], bool isBuy, double &target
       bool bearish = rates[i].close < rates[i].open;
       if(isBuy && bullish)
       {
-         if(rates[i - 1].close < rates[i - 1].open && rates[i - 1].high >= rates[i].high && rates[i - 1].low <= rates[i].low)
+         if(rates[i - 1].close < rates[i - 1].open && rates[i].high >= rates[i - 1].high && rates[i].low <= rates[i - 1].low)
          {
             target = rates[i].open;
             return true;
@@ -40,7 +40,7 @@ bool KAYB_FilterB_EngulfZone(const MqlRates &rates[], bool isBuy, double &target
       }
       if(!isBuy && bearish)
       {
-         if(rates[i - 1].close > rates[i - 1].open && rates[i - 1].high >= rates[i].high && rates[i - 1].low <= rates[i].low)
+         if(rates[i - 1].close > rates[i - 1].open && rates[i].high >= rates[i - 1].high && rates[i].low <= rates[i - 1].low)
          {
             target = rates[i].open;
             return true;
@@ -143,7 +143,7 @@ KAYBSetupSignal KAYB_BuildReversalSignal(const KAYBStructureState &st, const KAY
    sig.filterTag = "";
    sig.workflowLabel = wf.label;
    sig.timeframe = wf.confirmTf;
-   sig.signalTime = TimeCurrent();
+   sig.signalTime = st.lastBreakTime > 0 ? st.lastBreakTime : TimeCurrent();
 
    if(!st.valid)
       return sig;
@@ -259,7 +259,7 @@ KAYBSetupSignal KAYB_BuildContinuationSignal(const KAYBStructureState &st, const
    sig.filterTag = "continuation";
    sig.workflowLabel = wf.label;
    sig.timeframe = wf.confirmTf;
-   sig.signalTime = TimeCurrent();
+   sig.signalTime = st.lastBreakTime > 0 ? st.lastBreakTime : TimeCurrent();
 
    if(!st.valid)
       return sig;

@@ -82,6 +82,12 @@ datetime KAYB_LimitAnchor(ENUM_KAYBLimitMode mode)
    }
    else if(mode == KAYB_LIMIT_SESSION)
    {
+      bool wraps = InpSessionStartHour > InpSessionEndHour;
+      if(wraps && dt.hour < InpSessionEndHour)
+      {
+         datetime now = StructToTime(dt) - 86400;
+         TimeToStruct(now, dt);
+      }
       dt.hour = InpSessionStartHour;
       dt.min = 0;
       dt.sec = 0;
