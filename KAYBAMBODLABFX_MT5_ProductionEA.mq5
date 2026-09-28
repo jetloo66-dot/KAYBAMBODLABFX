@@ -229,9 +229,20 @@ void OnTimer()
    KAYB_ManageOpenPositions(g_trade, InpMagicNumber);
 }
 
-void OnTradeTransaction(const MqlTradeTransaction &trans,
-                        const MqlTradeRequest &,
-                        const MqlTradeResult &)
+
+void KAYB_ConsumeTradeEventContext(const MqlTradeRequest &request, const MqlTradeResult &result)
 {
+   // keep strict compilers happy while preserving exact event signature
+   if(request.action == TRADE_ACTION_DEAL && result.retcode == TRADE_RETCODE_DONE)
+   {
+      // no-op
+   }
+}
+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   KAYB_ConsumeTradeEventContext(request, result);
    KAYB_CaptureDealToMemory(trans);
 }

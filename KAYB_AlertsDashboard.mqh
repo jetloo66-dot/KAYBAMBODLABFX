@@ -51,9 +51,14 @@ void KAYB_SendTelegram(const string message)
    char result[];
    string reqHeaders = "Content-Type: application/x-www-form-urlencoded\r\n";
    string respHeaders = "";
-   StringToCharArray(payload, post, 0, StringLen(payload));
+   int postBytes = StringToCharArray(payload, post, 0, -1);
+   if(postBytes > 0)
+      postBytes -= 1;
+   else
+      postBytes = 0;
+
    ResetLastError();
-   int code = WebRequest("POST", url, reqHeaders, 5000, post, ArraySize(post) - 1, result, respHeaders);
+   int code = WebRequest("POST", url, reqHeaders, 5000, post, postBytes, result, respHeaders);
    if(code == -1)
       Print("KAYB telegram error: ", GetLastError());
 }
