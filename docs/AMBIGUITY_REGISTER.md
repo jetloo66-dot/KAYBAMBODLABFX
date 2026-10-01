@@ -1,0 +1,22 @@
+# Ambiguity Register
+
+All choices below are deterministic defaults, exposed as inputs where changing them changes strategy behavior. A change in settings requires separate backtesting; no rule implies profitability.
+
+| Concept | Deterministic choice | Configurability | Rationale |
+|---|---|---|---|
+| Swing confirmation | A pivot at shift `s` is confirmed only after `SwingStrength` newer bars have closed; never use shift 0 as a confirmation bar | Strength, history, max age, distance, equal-price tolerance | Uses only available closed data; avoids repainting/look-ahead |
+| Equal highs/lows | Treat points within `EqualSwingTolerancePoints` as equal and retain the oldest pivot in that equal-price cluster | Point tolerance | Avoids inventing a directional break and makes tie selection deterministic |
+| BOS vs CHOCH | Break of a confirmed swing in the established trend direction is BOS; break of the protected swing against the established direction is CHOCH. With neutral structure, label a break as BOS only if a same-direction structure exists; otherwise unclassified | Close/intrabar; BOS/CHOCH selector | Makes labels depend on structure rather than candle color |
+| Engulfing candle(s) | A bearish candle engulfs the prior bullish body when its body covers both prior body edges; wicks are not required. Multi-candle engulfing is not inferred | Module enablement and body/wick selection | Reproducible across OHLC sources |
+| Demand/supply zone | Zone is the high-low range of the last opposite-color closed candle before the qualifying impulse/break | Zone buffer, expiry, invalidation mode | Gives bounded, inspectable zone geometry |
+| Trendline | Connect the two latest confirmed same-type pivots; extrapolate linearly by bar index; use configurable point-width as the line zone | Enablement and width | Avoids subjective drawing and avoids future pivots |
+| “Touch” / return to LL2 | Retracement touches if the current closed candle range intersects the level/zone with configured point tolerance; an intrabar mode may use current Bid/Ask but cannot confirm a closed-bar rule | Confirmation mode and tolerance | Distinguishes closed confirmation from transient ticks |
+| Fibonacci wick vs body | Default endpoints use swing wicks (LL1/HH1 to the confirmed break price); optional body mode uses candle open/close extremes | Endpoint selector, selected retracement ratios | Wick anchors represent full traded range; body alternative is explicit |
+| MTF combination | Each selected eligible confirmation TF contributes a configurable weight if it has same-side confirmed structure and signal; require configured minimum count/weight | Explicit mapping, weights, count/score | No implicit “higher timeframe always agrees” behavior |
+| “Memory/learning” | Deterministic trade journal and rolling performance summaries only; no model training or adaptive rule mutation | Memory storage/filter disabled by default | Prevents unsupported ML claims and keeps signal rules repeatable |
+| Module combination | Evaluate enabled modules in A→D order. ANY accepts at least one, ALL requires all, FIRST_VALID picks first, PRIORITY picks the first passing module, CONFLUENCE_REQUIRED enforces count and score | Selection mode/order/minimum count | Inputs make otherwise subjective confluence explicit |
+| Intrabar break | Current quote beyond level is provisional; signal re-evaluation does not persist confirmation until selected method accepts it | Break method | Avoids treating an unclosed wick as closed-bar BOS/CHOCH |
+| News data unavailable | Do not fabricate events. If native calendar lookup is unavailable or fails, configured news filtering reports unavailable; default is news filter disabled | Enablement and event filters | Broker/calendar coverage varies, including in Strategy Tester |
+| “80% accuracy” / profit objectives | Treat as aspirational goals, not code guarantees; validate only on specified instruments/date ranges and out-of-sample tester data | No input can guarantee a hit rate | Market outcomes cannot be guaranteed by implementation |
+| “10 pips/points” | All distances are explicitly points, ticks, ATR, or manual prices; never silently equate a pip with a fixed point multiplier | Distance mode per risk setting | FX digits and non-FX contracts differ |
+| 34 input groups | Group names/details are not included in the supplied issue body; use 34 named groups derived from functional requirements | Each meaningful behavior has inputs | Documents the inference rather than passing it off as source specification |
