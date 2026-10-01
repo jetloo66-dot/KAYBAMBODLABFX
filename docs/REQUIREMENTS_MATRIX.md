@@ -1,41 +1,41 @@
 # Requirements Matrix
 
-Status describes the intended canonical implementation in `EA/`, not the legacy root-level EAs.
+Status describes the actual canonical source in `EA/`, not the legacy root-level EAs. `Implemented` means code is present and statically reviewed; no MetaEditor build or Strategy Tester run was available.
 
 | ID | Requirement | Module | Inputs | State | Implementation approach | Validation |
 |---|---|---|---|---|---|---|
-| R-01 | Native modern MQL5 EA using trade/position/order APIs | EA entry, Execution | General, execution | Planned | One `.mq5` entry point, modular `.mqh` files, `CTrade`; no MQL4 order calls | MetaEditor compile when available; static API review |
-| R-02 | Cache symbol/timeframe rates and detect new bars | Core/Data | Symbols, timeframes, data | Planned | Bounded `CopyRates` cache, per-symbol/timeframe bar timestamp | Review shift handling; repeated-call/cache inspection |
-| R-03 | Tick/point/digits/tick-value support for FX, metals, crypto and CFDs | Core/Data, Risk | Symbols, risk | Planned | Query symbol properties; use tick size/value and volume step, never assume pip scale | Formula review against symbol properties |
-| R-04 | Deterministic confirmed swings, configurable strength/lookback/distance/age/equal tolerance | Market/Structure | Swing | Planned | Closed-rate pivot confirmation; reject too-young pivots and filter equal/near pivots | No-look-ahead audit; deterministic tie tests by inspection |
-| R-05 | Three-pivot HH/HL uptrend and mirrored LL/LH downtrend sequences | Market/Structure | Structure | Planned | Retain ordered, typed swing history and require strict monotonic sequences | Sequence review; Buy/Sell symmetry audit |
-| R-06 | UPTREND/DOWNTREND/NEUTRAL/TRANSITION trend state | Market/Structure | Trend | Planned | Derive state from confirmed structure; transition on opposing break/invalid structure | State table review |
-| R-07 | Optional swing/structure/trend chart visuals under unique prefix | UI | Dashboard | Planned | Own prefixed chart objects only; cap/redraw only changed objects | Object-name and cleanup review |
-| R-08 | Buy reversal LL2→LH2→LL1 where LL1 < LL2 < LH2; mirrored Sell | Strategy | Reversal | Planned | Explicit ordered swing pattern and mirrored comparisons | Symmetry table and scenario review |
-| R-09 | Configurable close/intrabar BOS/CHOCH and selectable confirmation logic | Strategy | BOS/CHOCH | Planned | Break opposing confirmed swing; classify BOS with trend, CHOCH against trend | Break-level and close/intrabar review |
-| R-10 | Four independently configurable retracement modules A–D | Strategy | Retracement A-D | Planned | Return-to-LL2, engulfed candle, pre-break candle, fib level; mirror all prices | Algorithm review and symmetry table |
-| R-11 | Retracement combinations ANY/ALL/FIRST_VALID/PRIORITY/CONFLUENCE_REQUIRED | Strategy | Retracement combination | Planned | Deterministic module evaluation and selection in declared order | Branch/state review |
-| R-12 | Primary timeframe gate using Fib/zone/trendline conditions | Strategy | Primary gate, zones, Fibonacci, trendline | Planned | Independently evaluate gate and combine by selected mode | Condition matrix review |
-| R-13 | Configurable primary-to-confirmation timeframe map and weighted MTF decision | Strategy | Timeframes, MTF | Planned | Explicit eligibility mapping, score/count threshold and no implicit adjacent-TF assumptions | Mapping table and threshold review |
-| R-14 | Lifecycle-managed demand/supply/Fib/trendline/retracement zones | Strategy/UI | Zones | Planned | Bounded zones, expiry, invalidation and mitigation states | Lifecycle transition review |
-| R-15 | Structured analytical signal with unique ID and setup context | Strategy | Confluence, duplicate prevention | Planned | Signal carries side, TFs, structural state, retracement, zone, score and time | ID determinism and duplicate-check review |
-| R-16 | Trade execution modes, validation, retry policy and retcode logging | Execution | Execution, order types | Planned | `CTrade`, symbol stops/freeze/volume/spread checks; bounded retries | Static review; broker demo required |
-| R-17 | Prevent duplicate signal/order/position after repeated events or restart | Execution/Analytics | Duplicate prevention, restart | Planned | Derive setup ID and reconcile terminal positions/orders during initialization | Restart-state review and duplicate audit |
-| R-18 | Fixed/risk-percent/risk-money/dynamic position size | Risk | Risk sizing | Planned | Risk cash divided by loss-per-lot derived from tick value/size; normalize volume | Dimensional analysis and broker demo |
-| R-19 | Position/order limits total, direction, symbol and setup | Risk/Execution | Position limits | Planned | Count only this EA's magic/symbol as applicable; enforce before send | Count/filter review |
-| R-20 | Fixed/zone/swing/ATR/manual/hybrid SL and TP1–TP5 | Risk | Stop loss, take profit | Planned | Calculate prices from signal geometry; validate broker minimums and RR | Price rounding and risk audit |
-| R-21 | Partial TP allocations capped at 100%; break-even and trailing never worsen SL | Management | Partial profits, break-even/trailing | Planned | Track position volume/TP state and only tighten protective stops | Monotonic stop review; live demo required |
-| R-22 | Period profit/loss limits with configurable action | Risk | Profit/loss limits | Planned | Period-start balance/equity references and stop/close/alert action | Boundary/reset review |
-| R-23 | Native economic-calendar filter with no fabricated events | Filters | News | Planned | Query calendar where broker data is available; fail closed only when configured | Calendar availability and tester limitations documented |
-| R-24 | Overnight-aware sessions, trading-day, spread filters | Filters | Session/spread | Planned | Server-time windows and configurable day/spread gates | Midnight boundary review |
-| R-25 | Alerts, push and Telegram using configurable credentials | Alerts | Alerts | Planned | `Alert`, optional push and WebRequest; never hardcode/log credentials | Secret scan and WebRequest response review |
-| R-26 | Dashboard with status, market, structure, setup, trade and performance | UI | Dashboard | Planned | Own-prefixed chart labels, redraw on changed content | Chart-object ownership review |
-| R-27 | Deterministic trade memory, performance analytics and optional sample-gated filter | Analytics | Memory, performance filter | Planned | Record setup/outcome metrics, explicitly not ML; disabled-by-default threshold filter | Record-field and sample-gate review |
-| R-28 | Optimization bounds and no future-data leakage | Core, Strategy, Risk | All optimization inputs | Planned | Clamp/validate parameter combinations and use only confirmed bars | Static audit and tester checklist |
-| R-29 | New-bar analysis, cached indicators, bounded history and released handles | Core/EA | Data, debug | Planned | Separate analysis cadence from tick-time position management | Call-path and resource review |
-| R-30 | Preserve all earlier-stage features through Stages 2–4 | All | All | Planned | Regression checks listed in each stage report | Cross-stage checklist |
-| R-31 | Migration guide; retain legacy files | Repository | N/A | Planned | Add mapping in `MIGRATION_NOTES.md`; no legacy deletion | `git status` scope review |
-| R-32 | Honest compile/test/profitability claims | Docs | Debug | Planned | Report lack of MetaEditor/tester where applicable; no performance guarantee | Final audit against available tools |
+| R-01 | Native modern MQL5 EA using trade/position/order APIs | EA entry, Execution | General, execution | Implemented (uncompiled) | One `.mq5` entry point, modular `.mqh` files, `CTrade`; no MQL4 order calls in canonical tree | Static include/API review; MetaEditor compile unavailable |
+| R-02 | Cache symbol/timeframe rates and detect new bars | Core/Data | Symbols, timeframes, data | Implemented | Bounded `CopyRates` cache, per-symbol/timeframe bar timestamp | Static cache/shift review |
+| R-03 | Tick/point/digits/tick-value support for FX, metals, crypto and CFDs | Core/Data, Risk | Symbols, risk | Implemented | Query symbol properties; `OrderCalcProfit` and volume step, never assume pip scale | Dimensional/static review; broker test unavailable |
+| R-04 | Deterministic confirmed swings, configurable strength/lookback/distance/age/equal tolerance | Market/Structure | Swing | Implemented | Closed-rate pivot confirmation; reject too-young pivots and filter equal/near pivots | No-look-ahead review |
+| R-05 | Three-pivot HH/HL uptrend and mirrored LL/LH downtrend sequences | Market/Structure | Structure | Implemented | Retain ordered typed swings and require monotone sequences | Static comparison review |
+| R-06 | UPTREND/DOWNTREND/NEUTRAL/TRANSITION trend state | Market/Structure | Trend | Implemented | Derive classification from confirmed structure | State logic review |
+| R-07 | Optional swing/structure/trend chart visuals under unique prefix | UI | Dashboard | Partial | Bounded swing arrows and trend summary; no per-level zone labels | Object ownership review |
+| R-08 | Buy reversal LL2→LH2→LL1; mirrored Sell | Strategy | Reversal | Implemented | Ordered pivots with strict mirrored inequalities | Static symmetry review |
+| R-09 | Configurable close/intrabar BOS/CHOCH and selectable confirmation | Strategy | BOS/CHOCH | Partial | Break classification derives from current structure; both mode tracks each event per setup | State logic review; tester unavailable |
+| R-10 | Four independently configurable retracement modules A–D | Strategy | Retracement A-D | Partial | A–D implemented as level/candle-zone/Fib touches; candle semantics are deterministic | Symmetry and boundary review |
+| R-11 | ANY/ALL/FIRST_VALID/PRIORITY/CONFLUENCE_REQUIRED | Strategy | Retracement combination | Partial | Modes select from enabled modules; ALL means all configured module conditions pass | Branch review |
+| R-12 | Primary gate using Fib/zone/trendline | Strategy | Primary gate, zones, Fibonacci, trendline | Partial | ANY/ALL across available gate components; no zone invalidation/mitigation tracking | Condition review |
+| R-13 | Configurable primary-to-confirmation map and weighted MTF | Strategy | Timeframes, MTF | Partial | Up to three explicit distinct confirmation TFs with weights and single/multiple/all modes | Mapping/threshold review |
+| R-14 | Lifecycle-managed demand/supply/Fib/trendline/retracement zones | Strategy/UI | Zones | Partial | Setup zone and pending expiry implemented; lifecycle mitigation and charted zone set are not | State review |
+| R-15 | Structured analytical signal with unique ID and setup context | Strategy | Confluence, duplicate prevention | Implemented | Stable symbol/TF/direction/pivot-based ID and signal context | ID review |
+| R-16 | Trade modes, validation, retry and retcode logging | Execution | Execution, order types | Partial | `CTrade`, broker stop/freeze/volume/expiration checks and rejection logs; no retry loop | Static review |
+| R-17 | Duplicate prevention across events/restarts | Execution/Analytics | Duplicate prevention, restart | Partial | Terminal global setup key; terminal positions are managed after restart; no explicit pending-state reconstruction | Global-variable/position review |
+| R-18 | Fixed/risk-percent/risk-money/dynamic sizing | Risk | Risk sizing | Partial | Fixed, percent and money sizing via `OrderCalcProfit`; dynamic currently aliases percent | Formula review |
+| R-19 | Limits total/direction/symbol/setup | Risk/Execution | Position limits | Partial | Total, per-symbol and pending limits for this magic; no direction/setup-specific caps | Ownership/count review |
+| R-20 | SL modes and TP1–TP5 | Risk | Stop loss, take profit | Partial | Fixed/zone/swing/ATR/manual/hybrid SL, one configured target mode and optional R-stage partial closes | Formula review |
+| R-21 | Partial allocations, break-even and trailing | Management | Partial profits, break-even/trailing | Partial | R-stage percent partials, BE and tightening trailing; account-mode behavior needs tester verification | Monotonic stop review |
+| R-22 | Period profit/loss limits and action | Risk | Profit/loss limits | Partial | Realized server-day P/L stops new entries; no other windows or close-existing action | Boundary review |
+| R-23 | Native economic-calendar filter | Filters | News | Implemented (unverified) | High-impact base/quote calendar lookup; no fabricated events; lookup failure blocks entry | Broker calendar/tester verification unavailable |
+| R-24 | Session, day and spread filters | Filters | Session/spread | Implemented | Server-time, overnight-aware session and configurable days/spread gate | Static boundary review |
+| R-25 | Alert, push and Telegram | Alerts | Alerts | Partial | Signal alerts; configurable credentials; no event-complete trade lifecycle alert suite | Secret scan and API setup requirement |
+| R-26 | Status/market/structure/setup/trade/performance dashboard | UI | Dashboard | Partial | Own-prefixed status and structure label plus swing arrows | Chart-object review |
+| R-27 | Trade memory, analytics and performance filter | Analytics | Memory, performance filter | Partial | Local close-deal CSV and minimum-sample symbol/magic win-rate gate; no MFE/MAE/R or per-session analytics | File/state review |
+| R-28 | Optimization bounds/no future-data leakage | Core, Strategy, Risk | All optimization inputs | Partial | Input guards and confirmed-bar calculations; several broker scenarios still need validation | Static audit |
+| R-29 | New-bar analysis, cache, bounded history, released handles | Core/EA | Data, debug | Partial | Timer/new-bar analysis, cached bounded rates, no indicator handles created | Call-path review |
+| R-30 | Preserve earlier-stage features in later stages | All | All | Implemented in source scope | Stage reports record retained features and explicit gaps | Cross-stage static review |
+| R-31 | Migration guide; retain legacy files | Repository | N/A | Implemented | `MIGRATION_NOTES.md`; legacy files untouched | Git scope review |
+| R-32 | Honest validation/profitability claims | Docs | Debug | Implemented | Audit states compiler/tester/profitability limitations | Final audit |
 
 ## Scope notes
 
