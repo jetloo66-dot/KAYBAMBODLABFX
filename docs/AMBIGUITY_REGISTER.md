@@ -5,7 +5,7 @@ All choices below are deterministic defaults, exposed as inputs where changing t
 | Concept | Deterministic choice | Configurability | Rationale |
 |---|---|---|---|
 | Swing confirmation | A pivot at shift `s` is confirmed only after `SwingStrength` newer bars have closed; never use shift 0 as a confirmation bar | Strength, history, max age, distance, equal-price tolerance | Uses only available closed data; avoids repainting/look-ahead |
-| Equal highs/lows | Treat points within `EqualSwingTolerancePoints` as equal; keep the more extreme point, then earliest confirmed point on exact ties | Point tolerance | Avoids inventing a directional break from near-equal levels |
+| Equal highs/lows | Treat points within `EqualSwingTolerancePoints` as equal and retain the oldest pivot in that equal-price cluster | Point tolerance | Avoids inventing a directional break and makes tie selection deterministic |
 | BOS vs CHOCH | Break of a confirmed swing in the established trend direction is BOS; break of the protected swing against the established direction is CHOCH. With neutral structure, label a break as BOS only if a same-direction structure exists; otherwise unclassified | Close/intrabar; BOS/CHOCH selector | Makes labels depend on structure rather than candle color |
 | Engulfing candle(s) | A bearish candle engulfs the prior bullish body when its body covers both prior body edges; wicks are not required. Multi-candle engulfing is not inferred | Module enablement and body/wick selection | Reproducible across OHLC sources |
 | Demand/supply zone | Zone is the high-low range of the last opposite-color closed candle before the qualifying impulse/break | Zone buffer, expiry, invalidation mode | Gives bounded, inspectable zone geometry |

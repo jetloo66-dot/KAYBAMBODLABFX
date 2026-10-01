@@ -25,10 +25,14 @@ private:
          double older_price = (type == KBLX_SWING_HIGH ? rates[older].high : rates[older].low);
          if(type == KBLX_SWING_HIGH)
          {
-            if(newer_price >= price - tolerance || older_price >= price - tolerance)
+            if(newer_price > price + tolerance ||
+               older_price > price + tolerance ||
+               MathAbs(older_price - price) <= tolerance)
                return false;
          }
-         else if(newer_price <= price + tolerance || older_price <= price + tolerance)
+         else if(newer_price < price - tolerance ||
+                 older_price < price - tolerance ||
+                 MathAbs(older_price - price) <= tolerance)
             return false;
       }
       return true;
