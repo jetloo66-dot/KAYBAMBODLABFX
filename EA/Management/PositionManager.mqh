@@ -2,6 +2,7 @@
 #define KBLX_POSITION_MANAGER_MQH
 
 #include <Trade\Trade.mqh>
+#include "..\Risk\RiskManager.mqh"
 
 class CKBLXPositionManager
 {
@@ -19,6 +20,11 @@ private:
       return StringFormat("KBLX_P_%I64u_%d", ticket, stage);
    }
 
+   string InitialVolumeKey(const ulong ticket)
+   {
+      return StringFormat("KBLX_V_%I64u", ticket);
+   }
+
 public:
    void Configure(const long magic)
    {
@@ -29,8 +35,8 @@ public:
    void Manage(const bool break_even_enabled, const double break_even_trigger_r,
                const double break_even_offset_points, const bool trailing_enabled,
                const double trailing_start_points, const double trailing_distance_points,
-               const double trailing_step_points, const int take_profit_count,
-               const double partial_close_percent)
+               const double trailing_step_points, const KBLXDistanceUnitMode units,
+               const KBLXTradePlan &plan, CKBLXRiskManager &risk_manager)
    {
       for(int i = PositionsTotal() - 1; i >= 0; i--)
       {
@@ -59,16 +65,20 @@ public:
             GlobalVariableSet(risk_key, MathAbs(open_price - current_sl));
          double initial_risk = (GlobalVariableCheck(risk_key)
                                 ? GlobalVariableGet(risk_key) : 0.0);
-         if(initial_risk > 0.0 && take_profit_count > 1 &&
-            partial_close_percent > 0.0 &&
-            partial_close_percent * (take_profit_count - 1) <= 100.0)
+         string initial_volume_key = InitialVolumeKey(ticket);
+         if(!GlobalVariableCheck(initial_volume_key))
+            GlobalVariableSet(initial_volume_key, PositionGetDouble(POSITION_VOLUME));
+         double initial_volume = GlobalVariableGet(initial_volume_key);
+         if(initial_risk > 0.0 && plan.count > 1)
          {
             double progress = (type == POSITION_TYPE_BUY
                                ? market - open_price : open_price - market);
-            for(int stage = 1; stage < take_profit_count; stage++)
+            for(int stage = 0; stage < plan.count - 1; stage++)
             {
                string partial_key = PartialKey(ticket, stage);
-               if(progress < initial_risk * stage || GlobalVariableCheck(partial_key))
+               if(progress < initial_risk * plan.target_r[stage] ||
+                  GlobalVariableCheck(partial_key) ||
+                  plan.partial_percent[stage] <= 0.0)
                   continue;
                if(!PositionSelectByTicket(ticket))
                   break;
@@ -76,7 +86,7 @@ public:
                double step = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
                double remaining = PositionGetDouble(POSITION_VOLUME);
                double close_volume = (step > 0.0
-                                      ? MathFloor((remaining * partial_close_percent / 100.0) / step) * step
+                                      ? MathFloor((initial_volume * plan.partial_percent[stage] / 100.0) / step) * step
                                       : 0.0);
                close_volume = NormalizeDouble(close_volume, 8);
                if(close_volume < minimum || remaining - close_volume < minimum)
@@ -95,6 +105,10 @@ public:
                   GlobalVariableSet(partial_key, (double)TimeCurrent());
             }
          }
+         double break_even_offset = risk_manager.DistancePrice(symbol, break_even_offset_points, units);
+         double trailing_start = risk_manager.DistancePrice(symbol, trailing_start_points, units);
+         double trailing_distance = risk_manager.DistancePrice(symbol, trailing_distance_points, units);
+         double trailing_step = risk_manager.DistancePrice(symbol, trailing_step_points, units);
          double proposed_sl = current_sl;
          bool change = false;
 
@@ -106,7 +120,7 @@ public:
             if(reached)
             {
                double breakeven = open_price +
-                  (type == POSITION_TYPE_BUY ? 1.0 : -1.0) * break_even_offset_points * point;
+                  (type == POSITION_TYPE_BUY ? 1.0 : -1.0) * break_even_offset;
                if((type == POSITION_TYPE_BUY && (current_sl == 0.0 || breakeven > proposed_sl)) ||
                   (type == POSITION_TYPE_SELL && (current_sl == 0.0 || breakeven < proposed_sl)))
                {
@@ -119,13 +133,13 @@ public:
          if(trailing_enabled && trailing_start_points > 0.0 && trailing_distance_points > 0.0)
          {
             double profit_points = (type == POSITION_TYPE_BUY
-                                    ? (market - open_price) / point
-                                    : (open_price - market) / point);
-            if(profit_points >= trailing_start_points)
+                                    ? market - open_price
+                                    : open_price - market);
+            if(profit_points >= trailing_start)
             {
                double candidate = market +
-                  (type == POSITION_TYPE_BUY ? -1.0 : 1.0) * trailing_distance_points * point;
-               double step = MathMax(0.0, trailing_step_points) * point;
+                  (type == POSITION_TYPE_BUY ? -1.0 : 1.0) * trailing_distance;
+               double step = MathMax(0.0, trailing_step);
                bool improves = (type == POSITION_TYPE_BUY
                                 ? (proposed_sl == 0.0 || candidate > proposed_sl + step)
                                 : (proposed_sl == 0.0 || candidate < proposed_sl - step));

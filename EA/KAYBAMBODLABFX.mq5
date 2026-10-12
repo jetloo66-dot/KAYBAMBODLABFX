@@ -5,6 +5,7 @@
 #include "Core\Types.mqh"
 #include "Core\MarketData.mqh"
 #include "Market\StructureEngine.mqh"
+#include "Market\ContextEngine.mqh"
 #include "Strategy\SignalEngine.mqh"
 #include "Filters\TradingFilters.mqh"
 #include "Risk\RiskManager.mqh"
@@ -24,10 +25,55 @@ input string InpSymbols = "";
 input bool InpTradeChartSymbol = true;
 
 input group "=== TIMEFRAMES ==="
-input ENUM_TIMEFRAMES InpPrimaryTF = PERIOD_H1;
-input ENUM_TIMEFRAMES InpConfirmTF = PERIOD_M15;
-input ENUM_TIMEFRAMES InpConfirmTF2 = PERIOD_CURRENT;
-input ENUM_TIMEFRAMES InpConfirmTF3 = PERIOD_CURRENT;
+input ENUM_TIMEFRAMES InpTF_D1 = PERIOD_D1;
+input ENUM_TIMEFRAMES InpTF_H4 = PERIOD_H4;
+input ENUM_TIMEFRAMES InpTF_H1 = PERIOD_H1;
+input ENUM_TIMEFRAMES InpTF_M30 = PERIOD_M30;
+input ENUM_TIMEFRAMES InpTF_M15 = PERIOD_M15;
+input ENUM_TIMEFRAMES InpTF_M5 = PERIOD_M5;
+input ENUM_TIMEFRAMES InpTF_M1 = PERIOD_M1;
+input bool InpScanEveryTick = true;
+input bool InpAllowConcurrentSignals = true;
+
+input group "=== TIMEFRAME CONTEXT AND ENTRIES ==="
+input bool InpScanD1 = true;
+input bool InpScanH4 = true;
+input bool InpScanH1 = true;
+input bool InpScanM30 = true;
+input bool InpScanM15 = true;
+input bool InpScanM5 = true;
+input bool InpScanM1 = true;
+input bool InpTradeD1 = false;
+input bool InpTradeH4 = true;
+input bool InpTradeH1 = true;
+input bool InpTradeM30 = true;
+input bool InpTradeM15 = true;
+input bool InpTradeM5 = true;
+input bool InpTradeM1 = true;
+input bool InpIndependentH4 = false;
+input bool InpIndependentH1 = true;
+input bool InpIndependentM30 = true;
+input bool InpIndependentM15 = true;
+input bool InpIndependentM5 = true;
+input bool InpIndependentM1 = true;
+input bool InpRequireHigherDemandH4 = true;
+input bool InpRequireHigherDemandH1 = false;
+input bool InpRequireHigherDemandM30 = false;
+input bool InpRequireHigherDemandM15 = false;
+input bool InpRequireHigherDemandM5 = false;
+input bool InpRequireHigherDemandM1 = false;
+input bool InpRequireHigherTrendConfirmation = false;
+input bool InpUseMTFTrendFilter = false;
+input double InpMTFWeightD1 = 1.0;
+input double InpMTFWeightH4 = 1.0;
+input double InpMTFWeightH1 = 1.0;
+input double InpMTFWeightM30 = 1.0;
+input double InpMTFWeightM15 = 1.0;
+input double InpMTFWeightM5 = 1.0;
+input double InpMTFMinimumWeight = 1.0;
+input int InpContextLookbackBars = 100;
+input int InpVolumeBinPoints = 50;
+input bool InpRequireVolumeConfluence = false;
 
 input group "=== DATA ==="
 input int InpHistoryBars = 500;
@@ -111,14 +157,14 @@ input group "=== DUPLICATE PREVENTION ==="
 input bool InpPreventDuplicateSetups = true;
 
 input group "=== RISK SIZING ==="
-input KBLXSizingMode InpSizingMode = KBLX_RISK_PERCENT;
+input KBLXSizingMode InpSizingMode = KBLX_FIXED_LOT;
 input double InpFixedLots = 0.01;
 input double InpRiskPercent = 0.5;
 input double InpRiskMoney = 50.0;
 
 input group "=== POSITION LIMITS ==="
-input int InpMaxPositionsTotal = 3;
-input int InpMaxPositionsPerSymbol = 3;
+input int InpMaxPositionsTotal = 1;
+input int InpMaxPositionsPerSymbol = 1;
 input int InpMaxPendingOrders = 3;
 
 input group "=== STOP LOSS ==="
@@ -128,13 +174,25 @@ input double InpStopBufferPoints = 10.0;
 input double InpManualStopPrice = 0.0;
 input int InpStopATRPeriod = 14;
 input double InpStopATRMultiplier = 2.0;
+input KBLXDistanceUnitMode InpStopDistanceUnits = KBLX_UNITS_AUTO;
+input KBLXDistanceUnitMode InpManagementDistanceUnits = KBLX_UNITS_AUTO;
 
 input group "=== TAKE PROFIT ==="
 input KBLXTakeProfitMode InpTakeProfitMode = KBLX_TP_RR;
 input double InpRiskReward = 3.0;
-input int InpTakeProfitCount = 1;
+input int InpTakeProfitCount = 3;
 input double InpManualTakeProfitPrice = 0.0;
 input double InpFibonacciExtension = 1.618;
+input double InpTP_R1 = 0.5;
+input double InpTP_R2 = 1.0;
+input double InpTP_R3 = 3.0;
+input double InpTP_R4 = 4.0;
+input double InpTP_R5 = 5.0;
+input double InpTP_Partial1Percent = 25.0;
+input double InpTP_Partial2Percent = 25.0;
+input double InpTP_Partial3Percent = 0.0;
+input double InpTP_Partial4Percent = 0.0;
+input double InpTP_Partial5Percent = 0.0;
 
 input group "=== PARTIAL PROFITS ==="
 input double InpPartialClosePercent = 0.0;
@@ -149,13 +207,21 @@ input double InpTrailingDistancePoints = 50.0;
 input double InpTrailingStepPoints = 10.0;
 
 input group "=== PROFIT / LOSS LIMITS ==="
+input bool InpProfitTargetEnabled = true;
+input double InpProfitTargetPercent = 100.0;
+input bool InpLossLimitEnabled = true;
+input double InpLossLimitPercent = 5.0;
+input KBLXLimitPeriod InpLimitPeriod = KBLX_LIMIT_DAY;
+input int InpLimitMinutes = 60;
+input int InpLimitHours = 1;
 input double InpSessionProfitLimitMoney = 0.0;
 input double InpSessionLossLimitMoney = 0.0;
 
 input group "=== NEWS / SESSION / SPREAD ==="
-input bool InpNewsFilterEnabled = false;
+input bool InpNewsFilterEnabled = true;
 input int InpNewsMinutesBefore = 30;
 input int InpNewsMinutesAfter = 30;
+input int InpNewsMinimumImportance = 3;
 input bool InpSessionFilterEnabled = false;
 input int InpSessionStartHour = 0;
 input int InpSessionEndHour = 23;
@@ -187,10 +253,8 @@ input group "=== DEBUG ==="
 input bool InpDebug = false;
 
 CKBLXMarketData g_market_data;
-CKBLXStructureEngine g_primary_structure_engine;
-CKBLXStructureEngine g_confirm_structure_engine_1;
-CKBLXStructureEngine g_confirm_structure_engine_2;
-CKBLXStructureEngine g_confirm_structure_engine_3;
+CKBLXStructureEngine g_structure_engines[32][7];
+CKBLXContextEngine g_context_engine;
 CKBLXSignalEngine g_signal_engine;
 CKBLXTradingFilters g_filters;
 CKBLXRiskManager g_risk_manager;
@@ -200,6 +264,11 @@ CKBLXAlertEngine g_alerts;
 CKBLXDashboard g_dashboard;
 CKBLXTradeMemory g_trade_memory;
 KBLXStructure g_chart_structure;
+KBLXStructure g_frame_structures[32][7];
+KBLXMarketContext g_frame_contexts[32][7];
+datetime g_frame_bar_time[32][7];
+string g_cached_symbols[32];
+int g_cached_symbol_count = 0;
 datetime g_last_scan = 0;
 string g_status = "Initializing";
 

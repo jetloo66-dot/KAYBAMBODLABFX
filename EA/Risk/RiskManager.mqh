@@ -14,7 +14,37 @@ private:
       return 8;
    }
 
+   bool IsCurrencyCode(const string code)
+   {
+      string codes = " USD EUR GBP JPY CHF CAD AUD NZD SEK NOK DKK PLN CZK HUF TRY ZAR MXN SGD HKD CNY CNH INR THB BRL KRW RUB ";
+      return StringFind(codes, " " + code + " ") >= 0;
+   }
+
 public:
+   double DistancePrice(const string symbol, const double distance,
+                        const KBLXDistanceUnitMode mode)
+   {
+      double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+      if(point <= 0.0 || distance < 0.0)
+         return 0.0;
+      if(mode == KBLX_UNITS_POINTS)
+         return distance * point;
+      bool forex = false;
+      if(StringLen(symbol) >= 6)
+      {
+         string base = StringSubstr(symbol, 0, 3);
+         string quote = StringSubstr(symbol, 3, 3);
+         forex = IsCurrencyCode(base) && IsCurrencyCode(quote);
+      }
+      if(mode == KBLX_UNITS_PIPS && !forex)
+         return 0.0;
+      if(mode == KBLX_UNITS_AUTO && !forex)
+         return distance * point;
+      long digits = SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+      double pip = ((digits == 3 || digits == 5) ? point * 10.0 : point);
+      return distance * pip;
+   }
+
    double NormalizeVolume(const string symbol, const double requested)
    {
       double minimum = 0.0, maximum = 0.0, step = 0.0;
@@ -43,10 +73,11 @@ public:
       double cash_risk = risk_money;
       if(mode == KBLX_RISK_PERCENT || mode == KBLX_DYNAMIC_RISK)
       {
-         double balance = AccountInfoDouble(ACCOUNT_BALANCE);
-         cash_risk = balance * MathMax(0.0, risk_percent) / 100.0;
+         double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+         cash_risk = equity * MathMax(0.0, risk_percent) / 100.0;
       }
-      if(cash_risk <= 0.0 || entry <= 0.0 || stop <= 0.0)
+      if(cash_risk <= 0.0 || entry <= 0.0 || stop <= 0.0 ||
+         MathAbs(entry - stop) <= 0.0)
          return 0.0;
 
       double one_lot_profit = 0.0;
@@ -66,6 +97,7 @@ public:
                    const double atr_multiplier, const KBLXTakeProfitMode tp_mode,
                    const double manual_target, const double fib_extension_ratio,
                    double &stop, double &target,
+                   const KBLXDistanceUnitMode distance_units = KBLX_UNITS_AUTO,
                    const bool pending_entry = false)
    {
       string symbol = signal.symbol;
@@ -73,21 +105,25 @@ public:
       double entry = signal.entry;
       if(point <= 0.0 || entry <= 0.0)
          return false;
+      double stop_distance = DistancePrice(symbol, fixed_points, distance_units);
+      double buffer_distance = DistancePrice(symbol, buffer_points, distance_units);
+      if(stop_distance <= 0.0 || buffer_distance < 0.0)
+         return false;
 
       if(mode == KBLX_SL_MANUAL)
          stop = manual_stop;
       else if(mode == KBLX_SL_ZONE_BASED)
          stop = (signal.direction == KBLX_DIRECTION_BUY
-                 ? signal.zone.low - buffer_points * point
-                 : signal.zone.high + buffer_points * point);
+                 ? signal.zone.low - buffer_distance
+                 : signal.zone.high + buffer_distance);
       else if(mode == KBLX_SL_SWING_BASED)
          stop = (signal.direction == KBLX_DIRECTION_BUY
-                 ? signal.invalidation - buffer_points * point
-                 : signal.invalidation + buffer_points * point);
+                 ? signal.invalidation - buffer_distance
+                 : signal.invalidation + buffer_distance);
       else if(mode == KBLX_SL_HYBRID)
          stop = (signal.direction == KBLX_DIRECTION_BUY
-                 ? MathMin(signal.invalidation, signal.zone.low) - buffer_points * point
-                 : MathMax(signal.invalidation, signal.zone.high) + buffer_points * point);
+                 ? MathMin(signal.invalidation, signal.zone.low) - buffer_distance
+                 : MathMax(signal.invalidation, signal.zone.high) + buffer_distance);
       else if(mode == KBLX_SL_ATR_BASED)
       {
          if(atr_period < 1 || atr_multiplier <= 0.0)
@@ -105,13 +141,13 @@ public:
          }
          atr /= atr_period;
          stop = (signal.direction == KBLX_DIRECTION_BUY
-                 ? entry - atr * atr_multiplier - buffer_points * point
-                 : entry + atr * atr_multiplier + buffer_points * point);
+                 ? entry - atr * atr_multiplier - buffer_distance
+                 : entry + atr * atr_multiplier + buffer_distance);
       }
       else
          stop = (signal.direction == KBLX_DIRECTION_BUY
-                 ? entry - fixed_points * point
-                 : entry + fixed_points * point);
+                 ? entry - stop_distance
+                 : entry + stop_distance);
 
       double tick_size = data.TickSize(symbol);
       if(tick_size <= 0.0)

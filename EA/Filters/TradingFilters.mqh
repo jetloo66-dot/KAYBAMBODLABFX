@@ -6,6 +6,12 @@
 class CKBLXTradingFilters
 {
 private:
+   bool IsSupportedCalendarCurrency(const string currency)
+   {
+      string currencies = " USD EUR GBP JPY CHF CAD AUD NZD SEK NOK DKK PLN CZK HUF TRY ZAR MXN SGD HKD CNY INR BRL KRW ";
+      return StringFind(currencies, " " + currency + " ") >= 0;
+   }
+
    bool IsTradingDay(const int day, const bool monday, const bool tuesday,
                      const bool wednesday, const bool thursday, const bool friday,
                      const bool saturday, const bool sunday)
@@ -19,15 +25,11 @@ private:
       return saturday;
    }
 
-   bool IsNewsWindow(const string symbol, const int minutes_before, const int minutes_after)
+   bool IsNewsWindow(const string symbol, const int minutes_before,
+                     const int minutes_after, const int minimum_importance)
    {
-      string base_currency = "";
-      string quote_currency = "";
-      if(StringLen(symbol) >= 6)
-      {
-         base_currency = StringSubstr(symbol, 0, 3);
-         quote_currency = StringSubstr(symbol, 3, 3);
-      }
+      string base_currency = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
+      string quote_currency = SymbolInfoString(symbol, SYMBOL_CURRENCY_PROFIT);
       datetime now = TimeTradeServer();
       datetime from = now - minutes_after * 60;
       datetime to = now + minutes_before * 60;
@@ -37,7 +39,7 @@ private:
       currencies[1] = quote_currency;
       for(int c = 0; c < 2; c++)
       {
-         if(currencies[c] == "")
+         if(!IsSupportedCalendarCurrency(currencies[c]))
             continue;
          ArrayResize(values, 0);
          int count = CalendarValueHistory(values, from, to, "", currencies[c]);
@@ -48,7 +50,7 @@ private:
             MqlCalendarEvent event;
             if(!CalendarEventById(values[i].event_id, event))
                return true;
-            if(event.importance == CALENDAR_IMPORTANCE_HIGH)
+            if((int)event.importance >= minimum_importance)
                return true;
          }
       }
@@ -56,18 +58,42 @@ private:
    }
 
 public:
-   bool IsDailyPnLAllowed(const long magic, const double profit_limit,
-                          const double loss_limit)
+   bool IsProfitLossAllowed(const long magic, const bool profit_enabled,
+                            const double profit_percent, const bool loss_enabled,
+                            const double loss_percent, const KBLXLimitPeriod period,
+                            const int minutes, const int hours,
+                            const int session_start_hour, const int session_end_hour,
+                            const double profit_limit_money,
+                            const double loss_limit_money)
    {
-      if(profit_limit <= 0.0 && loss_limit <= 0.0)
+      if(!profit_enabled && !loss_enabled &&
+         profit_limit_money <= 0.0 && loss_limit_money <= 0.0)
          return true;
       datetime now = TimeTradeServer();
       MqlDateTime day;
       TimeToStruct(now, day);
-      day.hour = 0;
-      day.min = 0;
-      day.sec = 0;
-      datetime start = StructToTime(day);
+      int current_hour = day.hour;
+      datetime start = 0;
+      if(period == KBLX_LIMIT_MINUTES)
+         start = now - MathMax(1, minutes) * 60;
+      else if(period == KBLX_LIMIT_HOURS)
+         start = now - MathMax(1, hours) * 3600;
+      else if(period == KBLX_LIMIT_SESSION)
+      {
+         day.hour = session_start_hour;
+         day.min = 0;
+         day.sec = 0;
+         start = StructToTime(day);
+         if(session_start_hour > session_end_hour && current_hour < session_end_hour)
+            start -= 86400;
+      }
+      else
+      {
+         day.hour = 0;
+         day.min = 0;
+         day.sec = 0;
+         start = StructToTime(day);
+      }
       if(!HistorySelect(start, now))
          return false;
       double realized = 0.0;
@@ -80,9 +106,16 @@ public:
                      HistoryDealGetDouble(ticket, DEAL_COMMISSION) +
                      HistoryDealGetDouble(ticket, DEAL_SWAP);
       }
-      if(profit_limit > 0.0 && realized >= profit_limit)
+      double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+      if(profit_limit_money > 0.0 && realized >= profit_limit_money)
          return false;
-      if(loss_limit > 0.0 && realized <= -loss_limit)
+      if(loss_limit_money > 0.0 && realized <= -loss_limit_money)
+         return false;
+      if(profit_enabled && profit_percent > 0.0 &&
+         realized >= equity * profit_percent / 100.0)
+         return false;
+      if(loss_enabled && loss_percent > 0.0 &&
+         realized <= -equity * loss_percent / 100.0)
          return false;
       return true;
    }
@@ -93,7 +126,7 @@ public:
                   const bool thursday, const bool friday, const bool saturday,
                   const bool sunday, const double maximum_spread_points,
                   const bool news_enabled, const int news_before_minutes,
-                  const int news_after_minutes)
+                  const int news_after_minutes, const int news_minimum_importance)
    {
       MqlDateTime now;
       TimeToStruct(TimeTradeServer(), now);
@@ -122,7 +155,8 @@ public:
             (tick.ask - tick.bid) / point > maximum_spread_points)
             return false;
       }
-      if(news_enabled && IsNewsWindow(symbol, news_before_minutes, news_after_minutes))
+      if(news_enabled && IsNewsWindow(symbol, news_before_minutes, news_after_minutes,
+                                      news_minimum_importance))
          return false;
       return true;
    }

@@ -118,6 +118,7 @@ public:
                 const double manual_stop, const int atr_period,
                 const double atr_multiplier, const KBLXTakeProfitMode tp_mode,
                 const double manual_target, const double fib_extension_ratio,
+                const KBLXDistanceUnitMode distance_units,
                 const KBLXExecutionMode execution_mode,
                 const bool prevent_duplicates, double &stop_result,
                 double &target_result, double &volume_result)
@@ -136,7 +137,9 @@ public:
          return false;
       m_trade.SetTypeFillingBySymbol(signal.symbol);
 
-      string comment = StringSubstr(signal.id, 0, 31);
+      string comment = StringFormat("KBLX%c%d%d",
+         signal.direction == KBLX_DIRECTION_BUY ? 'B' : 'S',
+         (int)signal.primary_timeframe, (int)signal.retracement);
       bool use_pending = (execution_mode == KBLX_PENDING_ONLY);
       if(execution_mode == KBLX_AUTO_EXECUTION && signal.entry > 0.0)
          use_pending = (signal.direction == KBLX_DIRECTION_BUY
@@ -152,7 +155,8 @@ public:
                                      stop_buffer_points, risk_reward, manual_stop,
                                      atr_period, atr_multiplier, tp_mode,
                                      manual_target, fib_extension_ratio,
-                                     market_stop, market_target))
+                                     market_stop, market_target,
+                                     distance_units))
             return false;
          double market_volume = risk_manager.CalculateVolume(
             signal.symbol, signal.direction, market_signal.entry, market_stop,
@@ -174,7 +178,8 @@ public:
             risk_manager.BuildStops(
             data, pending_signal, stop_mode, stop_points, stop_buffer_points,
             risk_reward, manual_stop, atr_period, atr_multiplier, tp_mode,
-            manual_target, fib_extension_ratio, pending_stop, pending_target, true);
+            manual_target, fib_extension_ratio, pending_stop, pending_target,
+            distance_units, true);
          if(pending_valid)
          {
             pending_volume = risk_manager.CalculateVolume(
@@ -234,7 +239,7 @@ public:
                                   stop_buffer_points, risk_reward, manual_stop,
                                   atr_period, atr_multiplier, tp_mode,
                                   manual_target, fib_extension_ratio,
-                                  stop, target, use_pending))
+                                  stop, target, distance_units, use_pending))
          return false;
       double volume = risk_manager.CalculateVolume(signal.symbol, signal.direction,
                                                    execution_signal.entry, stop,

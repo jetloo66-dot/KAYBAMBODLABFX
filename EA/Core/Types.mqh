@@ -109,6 +109,21 @@ enum KBLXTakeProfitMode
    KBLX_TP_MANUAL = 3
 };
 
+enum KBLXDistanceUnitMode
+{
+   KBLX_UNITS_AUTO = 0,
+   KBLX_UNITS_POINTS = 1,
+   KBLX_UNITS_PIPS = 2
+};
+
+enum KBLXLimitPeriod
+{
+   KBLX_LIMIT_MINUTES = 0,
+   KBLX_LIMIT_HOURS = 1,
+   KBLX_LIMIT_SESSION = 2,
+   KBLX_LIMIT_DAY = 3
+};
+
 struct KBLXSwingPoint
 {
    KBLXSwingType type;
@@ -149,6 +164,17 @@ struct KBLXStructure
    bool valid;
 };
 
+struct KBLXMarketContext
+{
+   KBLXZone demand;
+   KBLXZone supply;
+   KBLXZone volume_zone;
+   double volume_price;
+   double average_volume;
+   KBLXTrend trend;
+   bool valid;
+};
+
 struct KBLXSignal
 {
    string id;
@@ -162,9 +188,24 @@ struct KBLXSignal
    double entry;
    double invalidation;
    double target_reference;
+   datetime first_pivot_time;
+   datetime middle_pivot_time;
+   datetime last_pivot_time;
+   datetime break_time;
+   datetime retracement_time;
+   double first_pivot_price;
+   double middle_pivot_price;
+   double last_pivot_price;
    double score;
    datetime created;
    bool valid;
+};
+
+struct KBLXTradePlan
+{
+   int count;
+   double target_r[5];
+   double partial_percent[5];
 };
 
 #endif
