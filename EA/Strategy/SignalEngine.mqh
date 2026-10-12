@@ -310,7 +310,7 @@ public:
 
       int configured = 1 + (enable_b ? 1 : 0) + (enable_c ? 1 : 0) + (enable_d ? 1 : 0);
       int passes = 1;
-      int selected = 0;
+      bool zone_confluence = false;
       for(int m = 1; m < 4; m++)
       {
          if(!module[m])
@@ -324,8 +324,8 @@ public:
                        zone_highs[m], tolerance))
          {
             passes++;
-            if(selected == 0)
-               selected = m;
+            if(m == 1 || m == 2)
+               zone_confluence = true;
          }
          else if(retrace_mode == KBLX_RETRACE_ALL)
             return false;
@@ -344,7 +344,7 @@ public:
                              : fib_start - span * fib_gate_ratio);
          fib_gate = Touches(rates[second_confirmation_shift], fib_level, tolerance);
       }
-      bool zone_gate = passes > 0;
+      bool zone_gate = zone_confluence;
       bool trendline_gate = false;
       if(enable_trendline && swing_count >= 4)
       {

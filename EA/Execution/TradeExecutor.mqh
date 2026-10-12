@@ -68,17 +68,14 @@ private:
                count++;
          }
       }
-      if(pending_only)
+      for(int i = OrdersTotal() - 1; i >= 0; i--)
       {
-         for(int i = OrdersTotal() - 1; i >= 0; i--)
-         {
-            ulong ticket = OrderGetTicket(i);
-            if(ticket == 0)
-               continue;
-            if(OrderGetInteger(ORDER_MAGIC) == m_magic &&
-               (symbol == "" || OrderGetString(ORDER_SYMBOL) == symbol))
-               count++;
-         }
+         ulong ticket = OrderGetTicket(i);
+         if(ticket == 0)
+            continue;
+         if(OrderGetInteger(ORDER_MAGIC) == m_magic &&
+            (symbol == "" || OrderGetString(ORDER_SYMBOL) == symbol))
+            count++;
       }
       return count;
    }

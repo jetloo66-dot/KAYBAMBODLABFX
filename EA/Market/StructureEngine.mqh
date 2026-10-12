@@ -92,9 +92,9 @@ public:
    {
       structure.valid = false;
       structure.trend = KBLX_TREND_NEUTRAL;
-      int required = MathMax(history_bars, strength * 2 + 10);
+      int required_bars = MathMax(history_bars, strength * 2 + 10);
       MqlRates rates[];
-      if(!data.GetRates(symbol, timeframe, required, rates))
+      if(!data.GetRates(symbol, timeframe, required_bars, rates))
          return false;
 
       m_swing_count = 0;
@@ -183,22 +183,22 @@ public:
          }
       }
 
-      int required = MathMax(3, required_structure_swings);
-      bool rising_highs = (structure.hh_count >= required);
-      bool rising_lows = (structure.hl_count >= required);
-      bool falling_highs = (structure.lh_count >= required);
-      bool falling_lows = (structure.ll_count >= required);
+      int required_swings = MathMax(3, required_structure_swings);
+      bool rising_highs = (structure.hh_count >= required_swings);
+      bool rising_lows = (structure.hl_count >= required_swings);
+      bool falling_highs = (structure.lh_count >= required_swings);
+      bool falling_lows = (structure.ll_count >= required_swings);
       if(rising_highs)
-         for(int i = structure.hh_count - required + 1; i < structure.hh_count; i++)
+         for(int i = structure.hh_count - required_swings + 1; i < structure.hh_count; i++)
             if(structure.hh[i] <= structure.hh[i - 1]) rising_highs = false;
       if(rising_lows)
-         for(int i = structure.hl_count - required + 1; i < structure.hl_count; i++)
+         for(int i = structure.hl_count - required_swings + 1; i < structure.hl_count; i++)
             if(structure.hl[i] <= structure.hl[i - 1]) rising_lows = false;
       if(falling_highs)
-         for(int i = structure.lh_count - required + 1; i < structure.lh_count; i++)
+         for(int i = structure.lh_count - required_swings + 1; i < structure.lh_count; i++)
             if(structure.lh[i] >= structure.lh[i - 1]) falling_highs = false;
       if(falling_lows)
-         for(int i = structure.ll_count - required + 1; i < structure.ll_count; i++)
+         for(int i = structure.ll_count - required_swings + 1; i < structure.ll_count; i++)
             if(structure.ll[i] >= structure.ll[i - 1]) falling_lows = false;
 
       if(rising_highs && rising_lows)

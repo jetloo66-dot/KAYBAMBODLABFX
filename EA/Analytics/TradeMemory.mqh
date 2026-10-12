@@ -120,7 +120,7 @@ public:
       int file = FileOpen(m_file_name, FILE_READ | FILE_CSV |
                           FILE_SHARE_READ | FILE_SHARE_WRITE, ',');
       if(file == INVALID_HANDLE)
-         return false;
+         return true;
       int samples = 0;
       int wins = 0;
       string setup_prefix = StringFormat("KBLX%c_%d_", direction, timeframe);
@@ -140,7 +140,7 @@ public:
       }
       FileClose(file);
       if(samples < MathMax(1, minimum_sample))
-         return false;
+         return true;
       return ((double)wins * 100.0 / samples >= minimum_win_rate);
    }
 };

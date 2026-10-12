@@ -660,12 +660,26 @@ void ScanMarkets()
             {
               structure.valid = false;
               structure.trend = KBLX_TREND_NEUTRAL;
-              g_frame_structures[symbol_slot][frame].valid = false;
-              g_frame_structures[symbol_slot][frame].trend = KBLX_TREND_NEUTRAL;
+              structure.hh_count = 0;
+              structure.hl_count = 0;
+              structure.lh_count = 0;
+              structure.ll_count = 0;
+              structure.latest_high = 0.0;
+              structure.latest_low = 0.0;
+              structure.latest_high_time = 0;
+              structure.latest_low_time = 0;
+              g_frame_structures[symbol_slot][frame] = structure;
             }
-            g_context_engine.Build(g_market_data, symbol, timeframe, structure,
+            bool context_ok = g_context_engine.Build(g_market_data, symbol, timeframe, structure,
               InpContextLookbackBars, zone_buffer_points, volume_bin_points,
               g_frame_contexts[symbol_slot][frame]);
+            if(!context_ok)
+            {
+              g_frame_contexts[symbol_slot][frame].valid = false;
+              g_frame_contexts[symbol_slot][frame].demand.valid = false;
+              g_frame_contexts[symbol_slot][frame].supply.valid = false;
+              g_frame_contexts[symbol_slot][frame].volume_zone.valid = false;
+            }
             g_frame_bar_time[symbol_slot][frame] = iTime(symbol, timeframe, 0);
             g_frame_retry_time[symbol_slot][frame] = TimeCurrent();
          }

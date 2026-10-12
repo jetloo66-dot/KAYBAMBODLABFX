@@ -110,7 +110,7 @@ public:
          day.min = 0;
          day.sec = 0;
          start = StructToTime(day);
-         if(session_start_hour > session_end_hour && current_hour < session_end_hour)
+         if(session_start_hour > session_end_hour && current_hour <= session_end_hour)
             start -= 86400;
       }
       else

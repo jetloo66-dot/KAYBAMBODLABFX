@@ -25,6 +25,39 @@ private:
       return StringFormat("KBLX_V_%I64u", ticket);
    }
 
+   double InitialRiskFromHistory(const ulong identifier, const double open_price,
+                                 const double current_sl)
+   {
+      ulong opening_order = 0;
+      datetime earliest = 0;
+      if(HistorySelectByPosition(identifier))
+      {
+         for(int i = 0; i < HistoryDealsTotal(); i++)
+         {
+            ulong deal = HistoryDealGetTicket(i);
+            if(deal == 0 || HistoryDealGetInteger(deal, DEAL_MAGIC) != m_magic)
+               continue;
+            ENUM_DEAL_ENTRY entry =
+               (ENUM_DEAL_ENTRY)HistoryDealGetInteger(deal, DEAL_ENTRY);
+            if(entry != DEAL_ENTRY_IN && entry != DEAL_ENTRY_INOUT)
+               continue;
+            datetime deal_time = (datetime)HistoryDealGetInteger(deal, DEAL_TIME);
+            if(earliest == 0 || deal_time < earliest)
+            {
+               earliest = deal_time;
+               opening_order = (ulong)HistoryDealGetInteger(deal, DEAL_ORDER);
+            }
+         }
+      }
+      if(opening_order > 0 && HistoryOrderSelect(opening_order))
+      {
+         double original_stop = HistoryOrderGetDouble(opening_order, ORDER_SL);
+         if(original_stop > 0.0 && MathAbs(open_price - original_stop) > 0.0)
+            return MathAbs(open_price - original_stop);
+      }
+      return (current_sl > 0.0 ? MathAbs(open_price - current_sl) : 0.0);
+   }
+
 public:
    void Configure(const long magic)
    {
@@ -61,8 +94,14 @@ public:
          double market = (type == POSITION_TYPE_BUY ? tick.bid : tick.ask);
 
          string risk_key = RiskKey(ticket);
-         if(!GlobalVariableCheck(risk_key) && current_sl > 0.0)
-            GlobalVariableSet(risk_key, MathAbs(open_price - current_sl));
+         if(!GlobalVariableCheck(risk_key))
+         {
+            ulong identifier = (ulong)PositionGetInteger(POSITION_IDENTIFIER);
+            double historical_risk = InitialRiskFromHistory(
+               identifier, open_price, current_sl);
+            if(historical_risk > 0.0)
+               GlobalVariableSet(risk_key, historical_risk);
+         }
          double initial_risk = (GlobalVariableCheck(risk_key)
                                 ? GlobalVariableGet(risk_key) : 0.0);
          string initial_volume_key = InitialVolumeKey(ticket);
