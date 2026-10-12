@@ -234,6 +234,16 @@ public:
       execution_signal.entry = (use_pending
                                 ? data.NormalizePrice(signal.symbol, signal.entry)
                                 : signal.direction == KBLX_DIRECTION_BUY ? tick.ask : tick.bid);
+      if(use_pending &&
+         ((signal.direction == KBLX_DIRECTION_BUY &&
+           execution_signal.entry >= tick.ask) ||
+          (signal.direction == KBLX_DIRECTION_SELL &&
+           execution_signal.entry <= tick.bid)))
+      {
+         PrintFormat("KBLX pending entry is not on a valid limit side for %s",
+                     signal.symbol);
+         return false;
+      }
       double stop = 0.0, target = 0.0;
       if(!risk_manager.BuildStops(data, execution_signal, stop_mode, stop_points,
                                   stop_buffer_points, risk_reward, manual_stop,

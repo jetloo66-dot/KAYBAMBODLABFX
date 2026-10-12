@@ -1,10 +1,41 @@
 #ifndef KBLX_TRADE_MEMORY_MQH
 #define KBLX_TRADE_MEMORY_MQH
 
+struct KBLXMemoryRecord
+{
+   string position_id;
+   string time;
+   string symbol;
+   string magic;
+   string volume;
+   string profit;
+   string commission;
+   string swap;
+   string comment;
+};
+
 class CKBLXTradeMemory
 {
 private:
    string m_file_name;
+
+   bool ReadRecord(const int file, KBLXMemoryRecord &record)
+   {
+      if(FileIsEnding(file))
+         return false;
+      record.position_id = FileReadString(file);
+      if(record.position_id == "" && FileIsEnding(file))
+         return false;
+      record.time = FileReadString(file);
+      record.symbol = FileReadString(file);
+      record.magic = FileReadString(file);
+      record.volume = FileReadString(file);
+      record.profit = FileReadString(file);
+      record.commission = FileReadString(file);
+      record.swap = FileReadString(file);
+      record.comment = FileReadString(file);
+      return true;
+   }
 
 public:
    CKBLXTradeMemory()
@@ -67,14 +98,10 @@ public:
          PrintFormat("KBLX trade memory could not open file (error %d)", GetLastError());
          return;
       }
-      while(!FileIsEnding(file))
+      KBLXMemoryRecord record;
+      while(ReadRecord(file, record))
       {
-         string saved_position = FileReadString(file);
-         if(FileIsEnding(file) && saved_position == "")
-            break;
-         for(int field = 0; field < 8 && !FileIsEnding(file); field++)
-            FileReadString(file);
-         if((ulong)StringToInteger(saved_position) == position_id)
+         if((ulong)StringToInteger(record.position_id) == position_id)
          {
             FileClose(file);
             return;
@@ -97,24 +124,16 @@ public:
       int samples = 0;
       int wins = 0;
       string setup_prefix = StringFormat("KBLX%c%d", direction, timeframe);
-      while(!FileIsEnding(file))
+      KBLXMemoryRecord record;
+      while(ReadRecord(file, record))
       {
-         string ticket = FileReadString(file);
-         if(FileIsEnding(file) && ticket == "")
-            break;
-         string time = FileReadString(file);
-         string row_symbol = FileReadString(file);
-         string row_magic = FileReadString(file);
-         string volume = FileReadString(file);
-         string profit = FileReadString(file);
-         string commission = FileReadString(file);
-         string swap = FileReadString(file);
-         string comment = FileReadString(file);
-         if(row_symbol != symbol || (long)StringToInteger(row_magic) != magic ||
-            StringFind(comment, setup_prefix) != 0)
+         if(record.symbol != symbol ||
+            (long)StringToInteger(record.magic) != magic ||
+            StringFind(record.comment, setup_prefix) != 0)
             continue;
-         double net = StringToDouble(profit) + StringToDouble(commission) +
-                      StringToDouble(swap);
+         double net = StringToDouble(record.profit) +
+                      StringToDouble(record.commission) +
+                      StringToDouble(record.swap);
          samples++;
          if(net > 0.0)
             wins++;

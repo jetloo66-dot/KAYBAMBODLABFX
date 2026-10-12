@@ -6,6 +6,17 @@
 class CKBLXTradingFilters
 {
 private:
+   datetime m_pnl_checked;
+   bool m_pnl_cache_valid;
+   bool m_pnl_cached_allowed;
+
+   void CachePnLResult(const datetime checked, const bool allowed)
+   {
+      m_pnl_checked = checked;
+      m_pnl_cached_allowed = allowed;
+      m_pnl_cache_valid = true;
+   }
+
    bool IsSupportedCalendarCurrency(const string currency)
    {
       string currencies = " USD EUR GBP JPY CHF CAD AUD NZD SEK NOK DKK PLN CZK HUF TRY ZAR MXN SGD HKD CNY INR BRL KRW ";
@@ -58,6 +69,18 @@ private:
    }
 
 public:
+   CKBLXTradingFilters()
+   {
+      m_pnl_checked = 0;
+      m_pnl_cache_valid = false;
+      m_pnl_cached_allowed = true;
+   }
+
+   void InvalidatePnL()
+   {
+      m_pnl_cache_valid = false;
+   }
+
    bool IsProfitLossAllowed(const long magic, const bool profit_enabled,
                             const double profit_percent, const bool loss_enabled,
                             const double loss_percent, const KBLXLimitPeriod period,
@@ -70,6 +93,9 @@ public:
          profit_limit_money <= 0.0 && loss_limit_money <= 0.0)
          return true;
       datetime now = TimeTradeServer();
+      if(m_pnl_cache_valid && now >= m_pnl_checked &&
+         now - m_pnl_checked < 5)
+         return m_pnl_cached_allowed;
       MqlDateTime day;
       TimeToStruct(now, day);
       int current_hour = day.hour;
@@ -95,7 +121,10 @@ public:
          start = StructToTime(day);
       }
       if(!HistorySelect(start, now))
+      {
+         CachePnLResult(now, false);
          return false;
+      }
       double realized = 0.0;
       for(int i = 0; i < HistoryDealsTotal(); i++)
       {
@@ -108,15 +137,28 @@ public:
       }
       double equity = AccountInfoDouble(ACCOUNT_EQUITY);
       if(profit_limit_money > 0.0 && realized >= profit_limit_money)
+      {
+         CachePnLResult(now, false);
          return false;
+      }
       if(loss_limit_money > 0.0 && realized <= -loss_limit_money)
+      {
+         CachePnLResult(now, false);
          return false;
+      }
       if(profit_enabled && profit_percent > 0.0 &&
          realized >= equity * profit_percent / 100.0)
+      {
+         CachePnLResult(now, false);
          return false;
+      }
       if(loss_enabled && loss_percent > 0.0 &&
          realized <= -equity * loss_percent / 100.0)
+      {
+         CachePnLResult(now, false);
          return false;
+      }
+      CachePnLResult(now, true);
       return true;
    }
 

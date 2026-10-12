@@ -372,8 +372,11 @@ public:
             double projected = line2.price +
                                slope * ((double)retrace_time -
                                         (double)line2.pivot_time);
-            trendline_gate = (live_price >= projected - trendline_width_points * point &&
-                              live_price <= projected + trendline_width_points * point);
+            double retracement_price = (require_closed_retrace
+                                        ? rates[second_confirmation_shift].close
+                                        : live_price);
+            trendline_gate = (retracement_price >= projected - trendline_width_points * point &&
+                              retracement_price <= projected + trendline_width_points * point);
          }
       }
       if(require_primary_gate && primary_gate_mode == KBLX_PRIMARY_GATE_ALL &&

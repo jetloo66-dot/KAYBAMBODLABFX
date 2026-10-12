@@ -15,6 +15,9 @@
 #include "UI\Dashboard.mqh"
 #include "Analytics\TradeMemory.mqh"
 
+#define KBLX_MAX_SYMBOLS 32
+#define KBLX_FRAME_COUNT 7
+
 input group "=== GENERAL ==="
 input bool InpAllowTrading = true;
 input long InpMagicNumber = 316316316;
@@ -248,7 +251,7 @@ input group "=== DEBUG ==="
 input bool InpDebug = false;
 
 CKBLXMarketData g_market_data;
-CKBLXStructureEngine g_structure_engines[224];
+CKBLXStructureEngine g_structure_engines[KBLX_MAX_SYMBOLS * KBLX_FRAME_COUNT];
 CKBLXContextEngine g_context_engine;
 CKBLXSignalEngine g_signal_engine;
 CKBLXTradingFilters g_filters;
@@ -259,10 +262,10 @@ CKBLXAlertEngine g_alerts;
 CKBLXDashboard g_dashboard;
 CKBLXTradeMemory g_trade_memory;
 KBLXStructure g_chart_structure;
-KBLXStructure g_frame_structures[32][7];
-KBLXMarketContext g_frame_contexts[32][7];
-datetime g_frame_bar_time[32][7];
-string g_cached_symbols[32];
+KBLXStructure g_frame_structures[KBLX_MAX_SYMBOLS][KBLX_FRAME_COUNT];
+KBLXMarketContext g_frame_contexts[KBLX_MAX_SYMBOLS][KBLX_FRAME_COUNT];
+datetime g_frame_bar_time[KBLX_MAX_SYMBOLS][KBLX_FRAME_COUNT];
+string g_cached_symbols[KBLX_MAX_SYMBOLS];
 int g_cached_symbol_count = 0;
 datetime g_last_scan = 0;
 string g_status = "Initializing";
@@ -320,12 +323,12 @@ bool ValidateInputs()
       InpPrimaryGateMode > KBLX_PRIMARY_GATE_ALL ||
       InpLimitPeriod < KBLX_LIMIT_MINUTES || InpLimitPeriod > KBLX_LIMIT_DAY)
       return false;
-   ENUM_TIMEFRAMES frames[7];
+   ENUM_TIMEFRAMES frames[KBLX_FRAME_COUNT];
    frames[0] = InpTF_D1; frames[1] = InpTF_H4; frames[2] = InpTF_H1;
    frames[3] = InpTF_M30; frames[4] = InpTF_M15; frames[5] = InpTF_M5;
    frames[6] = InpTF_M1;
-   bool scans[7];
-   bool trades[7];
+   bool scans[KBLX_FRAME_COUNT];
+   bool trades[KBLX_FRAME_COUNT];
    scans[0] = InpScanD1; scans[1] = InpScanH4; scans[2] = InpScanH1;
    scans[3] = InpScanM30; scans[4] = InpScanM15; scans[5] = InpScanM5;
    scans[6] = InpScanM1;
@@ -334,7 +337,7 @@ bool ValidateInputs()
    trades[6] = InpTradeM1;
    bool any_scan = false;
    int scanned_frames = 0;
-   for(int i = 0; i < 7; i++)
+   for(int i = 0; i < KBLX_FRAME_COUNT; i++)
    {
       if(PeriodSeconds(frames[i]) <= 0)
          return false;
@@ -414,7 +417,7 @@ int BuildSymbolList(string &symbols[])
    string configured[];
    ushort separator = (ushort)StringGetCharacter(",", 0);
    int count = StringSplit(InpSymbols, separator, configured);
-   for(int i = 0; i < count && ArraySize(symbols) < 32; i++)
+   for(int i = 0; i < count && ArraySize(symbols) < KBLX_MAX_SYMBOLS; i++)
    {
       StringTrimLeft(configured[i]);
       StringTrimRight(configured[i]);
@@ -435,7 +438,7 @@ int BuildSymbolList(string &symbols[])
       bool found = false;
       for(int i = 0; i < ArraySize(symbols); i++)
          if(symbols[i] == _Symbol) found = true;
-      if(!found && ArraySize(symbols) < 32)
+      if(!found && ArraySize(symbols) < KBLX_MAX_SYMBOLS)
       {
          int size = ArraySize(symbols);
          ArrayResize(symbols, size + 1);
@@ -516,7 +519,7 @@ int CachedSymbolSlot(const string symbol)
    for(int i = 0; i < g_cached_symbol_count; i++)
       if(g_cached_symbols[i] == symbol)
          return i;
-   if(g_cached_symbol_count >= 32)
+   if(g_cached_symbol_count >= KBLX_MAX_SYMBOLS)
       return -1;
    int slot = g_cached_symbol_count++;
    g_cached_symbols[slot] = symbol;
@@ -574,7 +577,7 @@ bool MTFTrendPasses(const int symbol_slot, const int entry_frame,
    int aligned = 0;
    double weight = 0.0;
    int available = 0;
-   for(int frame = 0; frame < 7; frame++)
+   for(int frame = 0; frame < KBLX_FRAME_COUNT; frame++)
    {
       if(frame == entry_frame || !FrameScanned(frame) ||
          (InpRequireHigherTrendConfirmation && frame > entry_frame) ||
@@ -620,7 +623,7 @@ void ScanMarkets()
       int symbol_slot = CachedSymbolSlot(symbol);
       if(symbol_slot < 0)
          continue;
-      for(int frame = 0; frame < 7; frame++)
+      for(int frame = 0; frame < KBLX_FRAME_COUNT; frame++)
       {
          if(!FrameScanned(frame))
             continue;
@@ -640,7 +643,7 @@ void ScanMarkets()
             if(minimum_swing_points < 0.0 || equal_swing_points < 0.0 ||
               zone_buffer_points < 0.0 || volume_bin_points < 0.0)
               continue;
-            int engine_index = symbol_slot * 7 + frame;
+            int engine_index = symbol_slot * KBLX_FRAME_COUNT + frame;
             bool structure_ok = g_structure_engines[engine_index].Update(
               g_market_data, symbol, timeframe,
               MathMin(InpHistoryBars, InpSwingLookback),
@@ -662,27 +665,27 @@ void ScanMarkets()
 
       if(symbol == _Symbol)
       {
-         for(int frame = 0; frame < 7; frame++)
+         for(int frame = 0; frame < KBLX_FRAME_COUNT; frame++)
             g_dashboard.DrawFrameContext(
                InpDashboardEnabled && FrameScanned(frame), symbol,
                FrameTimeframe(frame), frame,
                g_frame_structures[symbol_slot][frame],
                g_frame_contexts[symbol_slot][frame]);
          int chart_frame = 2;
-         for(int frame = 0; frame < 7; frame++)
+         for(int frame = 0; frame < KBLX_FRAME_COUNT; frame++)
             if(FrameTimeframe(frame) == (ENUM_TIMEFRAMES)_Period &&
               g_frame_structures[symbol_slot][frame].valid)
               chart_frame = frame;
          g_chart_structure = g_frame_structures[symbol_slot][chart_frame];
          KBLXSwingPoint chart_swings[];
          ArrayResize(chart_swings, 32);
-         int count = g_structure_engines[symbol_slot * 7 + chart_frame].GetSwings(chart_swings, 20);
+         int count = g_structure_engines[symbol_slot * KBLX_FRAME_COUNT + chart_frame].GetSwings(chart_swings, 20);
          g_dashboard.DrawSwings(InpDrawSwings, chart_swings, count);
       }
       if(!InpAllowTrading || !InpEnableReversals)
          continue;
 
-      for(int frame = 0; frame < 7; frame++)
+      for(int frame = 0; frame < KBLX_FRAME_COUNT; frame++)
       {
          if(!FrameTrades(frame) || !g_frame_structures[symbol_slot][frame].valid)
             continue;
@@ -700,7 +703,7 @@ void ScanMarkets()
             trendline_width < 0.0)
             continue;
          if(!g_signal_engine.Analyze(
-              g_market_data, g_structure_engines[symbol_slot * 7 + frame],
+              g_market_data, g_structure_engines[symbol_slot * KBLX_FRAME_COUNT + frame],
               symbol, timeframe, structure, InpHistoryBars, InpBreakSelection,
               InpRequireLiquiditySweep, sweep_tolerance,
               InpEnableRetraceB, InpEnableRetraceC, InpEnableRetraceD,
@@ -854,5 +857,8 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
                         const MqlTradeResult &result)
 {
    if(transaction.type == TRADE_TRANSACTION_DEAL_ADD)
+   {
+      g_filters.InvalidatePnL();
       g_trade_memory.RecordDeal(transaction.deal, InpTradeMemoryEnabled, InpMagicNumber);
+   }
 }

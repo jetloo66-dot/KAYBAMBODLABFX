@@ -63,6 +63,16 @@ private:
       ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
    }
 
+   void DeleteByPrefix(const string prefix)
+   {
+      for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
+      {
+         string name = ObjectName(0, i);
+         if(StringFind(name, prefix) == 0)
+            ObjectDelete(0, name);
+      }
+   }
+
 public:
    CKBLXDashboard()
    {
@@ -178,12 +188,7 @@ public:
    void DrawSignal(const KBLXSignal &signal, const KBLXMarketContext &context,
                    const double stop, const double target)
    {
-      for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
-      {
-         string name = ObjectName(0, i);
-         if(StringFind(name, m_prefix + "SETUP_") == 0)
-            ObjectDelete(0, name);
-      }
+      DeleteByPrefix(m_prefix + "SETUP_");
       string key = StringFormat("%I64d_%I64d_%c",
          (long)signal.first_pivot_time, (long)signal.last_pivot_time,
          signal.direction == KBLX_DIRECTION_BUY ? 'B' : 'S');
@@ -231,12 +236,7 @@ public:
 
    void Cleanup()
    {
-      for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
-      {
-         string name = ObjectName(0, i);
-         if(StringFind(name, m_prefix) == 0)
-            ObjectDelete(0, name);
-      }
+      DeleteByPrefix(m_prefix);
    }
 };
 

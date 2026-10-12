@@ -90,7 +90,16 @@ public:
                                       : 0.0);
                close_volume = NormalizeDouble(close_volume, 8);
                if(close_volume < minimum || remaining - close_volume < minimum)
+               {
+                  GlobalVariableSet(partial_key, (double)TimeCurrent());
                   continue;
+               }
+               if(!PositionSelectByTicket(ticket) ||
+                  PositionGetInteger(POSITION_MAGIC) != m_magic ||
+                  PositionGetString(POSITION_SYMBOL) != symbol ||
+                  (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE) != type ||
+                  PositionGetDouble(POSITION_VOLUME) < close_volume + minimum)
+                  break;
                bool close_sent = false;
                if((ENUM_ACCOUNT_MARGIN_MODE)AccountInfoInteger(ACCOUNT_MARGIN_MODE) ==
                   ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
