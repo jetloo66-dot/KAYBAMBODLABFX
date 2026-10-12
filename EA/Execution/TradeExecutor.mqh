@@ -219,9 +219,18 @@ public:
                 pending_retcode == TRADE_RETCODE_DONE_PARTIAL);
          }
          bool accepted_both_mode = market_accepted || pending_accepted;
-         stop_result = market_stop;
-         target_result = market_target;
-         volume_result = final_market_volume;
+         if(market_accepted)
+         {
+            stop_result = market_stop;
+            target_result = market_target;
+            volume_result = final_market_volume;
+         }
+         else if(pending_accepted)
+         {
+            stop_result = pending_stop;
+            target_result = pending_target;
+            volume_result = pending_volume;
+         }
          if(accepted_both_mode)
             GlobalVariableSet(SetupKey(signal.id), (double)TimeCurrent());
          else

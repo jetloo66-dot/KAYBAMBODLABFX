@@ -63,11 +63,19 @@ private:
       for(int i = GlobalVariablesTotal() - 1; i >= 0; i--)
       {
          string name = GlobalVariableName(i);
-         if(StringFind(name, "KBLX_R_") != 0 &&
-            StringFind(name, "KBLX_P_") != 0 &&
-            StringFind(name, "KBLX_V_") != 0)
+         bool risk_key = StringFind(name, "KBLX_R_") == 0;
+         bool partial_key = StringFind(name, "KBLX_P_") == 0;
+         bool volume_key = StringFind(name, "KBLX_V_") == 0;
+         if(!risk_key && !partial_key && !volume_key)
             continue;
          int separator = StringFind(name, "_", 7);
+         if((risk_key || volume_key) && separator >= 0)
+            continue;
+         if(partial_key &&
+            (separator < 8 || StringFind(name, "_", separator + 1) >= 0 ||
+             StringToInteger(StringSubstr(name, separator + 1)) < 0 ||
+             StringToInteger(StringSubstr(name, separator + 1)) > 4))
+            continue;
          string ticket_text = (separator < 0
                                ? StringSubstr(name, 7)
                                : StringSubstr(name, 7, separator - 7));

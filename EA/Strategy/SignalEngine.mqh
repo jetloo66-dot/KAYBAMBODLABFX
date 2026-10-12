@@ -258,7 +258,7 @@ public:
       zone_lows[3] = 0.0; zone_highs[3] = 0.0;
       int anchor_shift = -1;
       int engulf_shift = -1;
-      for(int i = 2; i < ArraySize(rates) - 1; i++)
+      for(int i = last_rate_shift + 1; i < first_rate_shift; i++)
       {
          if(rates[i].time <= first_pivot.pivot_time ||
             rates[i].time >= last_pivot.pivot_time)
