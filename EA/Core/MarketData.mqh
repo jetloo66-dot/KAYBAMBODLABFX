@@ -3,7 +3,7 @@
 
 #include "Types.mqh"
 
-#define KBLX_RATE_CACHE_SLOTS 128
+#define KBLX_RATE_CACHE_SLOTS 256
 
 struct KBLXRateCache
 {
