@@ -617,11 +617,17 @@ void ScanMarkets()
    {
       string symbol = symbols[symbol_index];
       if(!SymbolSelect(symbol, true))
+      {
+         PrintFormat("KBLX skipped unavailable symbol: %s", symbol);
          continue;
+      }
       int symbol_slot = CachedSymbolSlot(symbol);
       if(symbol_slot < 0 ||
          symbol_slot >= ArraySize(g_structure_engines) / KBLX_FRAME_COUNT)
+      {
+         PrintFormat("KBLX skipped symbol with no allocated engine slot: %s", symbol);
          continue;
+      }
       for(int frame = 0; frame < KBLX_FRAME_COUNT; frame++)
       {
          if(!FrameScanned(frame))

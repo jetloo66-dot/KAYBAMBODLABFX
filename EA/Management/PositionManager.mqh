@@ -161,7 +161,7 @@ public:
                {
                   PrintFormat("KBLX partial target %d skipped for %s: volume %.8f cannot be split",
                               stage + 1, symbol, remaining);
-                  GlobalVariableSet(partial_key, (double)TimeCurrent());
+                  GlobalVariableSet(partial_key, -(double)TimeCurrent());
                   continue;
                }
                if(!PositionSelectByTicket(ticket) ||

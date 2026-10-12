@@ -18,6 +18,8 @@ class CKBLXTradeMemory
 {
 private:
    string m_file_name;
+   KBLXMemoryRecord m_records[];
+   bool m_loaded;
 
    bool ReadRecord(const int file, KBLXMemoryRecord &record)
    {
@@ -37,10 +39,40 @@ private:
       return true;
    }
 
+   void LoadRecords()
+   {
+      if(m_loaded)
+         return;
+      int file = FileOpen(m_file_name, FILE_READ | FILE_CSV |
+                          FILE_SHARE_READ | FILE_SHARE_WRITE, ',');
+      if(file != INVALID_HANDLE)
+      {
+         KBLXMemoryRecord record;
+         while(ReadRecord(file, record))
+         {
+            int size = ArraySize(m_records);
+            if(ArrayResize(m_records, size + 1) != size + 1)
+               break;
+            m_records[size] = record;
+         }
+         FileClose(file);
+      }
+      m_loaded = true;
+   }
+
+   bool HasPositionRecord(const ulong position_id)
+   {
+      for(int i = 0; i < ArraySize(m_records); i++)
+         if((ulong)StringToInteger(m_records[i].position_id) == position_id)
+            return true;
+      return false;
+   }
+
 public:
    CKBLXTradeMemory()
    {
       m_file_name = "KBLX_trade_memory.csv";
+      m_loaded = false;
    }
 
    void RecordDeal(const ulong deal_ticket, const bool enabled, const long expected_magic)
@@ -91,6 +123,9 @@ public:
             comment = HistoryDealGetString(history_ticket, DEAL_COMMENT);
          }
       }
+      LoadRecords();
+      if(HasPositionRecord(position_id))
+         return;
       int file = FileOpen(m_file_name, FILE_READ | FILE_WRITE | FILE_CSV |
                           FILE_SHARE_READ | FILE_SHARE_WRITE, ',');
       if(file == INVALID_HANDLE)
@@ -98,47 +133,48 @@ public:
          PrintFormat("KBLX trade memory could not open file (error %d)", GetLastError());
          return;
       }
-      KBLXMemoryRecord record;
-      while(ReadRecord(file, record))
-      {
-         if((ulong)StringToInteger(record.position_id) == position_id)
-         {
-            FileClose(file);
-            return;
-         }
-      }
       FileSeek(file, 0, SEEK_END);
-      FileWrite(file, position_id, time, symbol, magic, volume,
-                profit, commission, swap, comment);
+      uint written = FileWrite(file, position_id, time, symbol, magic, volume,
+                               profit, commission, swap, comment);
       FileClose(file);
+      if(written == 0)
+         return;
+      KBLXMemoryRecord record;
+      record.position_id = (string)position_id;
+      record.time = (string)time;
+      record.symbol = symbol;
+      record.magic = (string)magic;
+      record.volume = DoubleToString(volume, 8);
+      record.profit = DoubleToString(profit, 8);
+      record.commission = DoubleToString(commission, 8);
+      record.swap = DoubleToString(swap, 8);
+      record.comment = comment;
+      int size = ArraySize(m_records);
+      if(ArrayResize(m_records, size + 1) == size + 1)
+         m_records[size] = record;
    }
 
    bool AllowsSetup(const string symbol, const long magic, const char direction,
                     const int timeframe, const int minimum_sample,
                     const double minimum_win_rate)
    {
-      int file = FileOpen(m_file_name, FILE_READ | FILE_CSV |
-                          FILE_SHARE_READ | FILE_SHARE_WRITE, ',');
-      if(file == INVALID_HANDLE)
-         return true;
+      LoadRecords();
       int samples = 0;
       int wins = 0;
       string setup_prefix = StringFormat("KBLX%c_%d_", direction, timeframe);
-      KBLXMemoryRecord record;
-      while(ReadRecord(file, record))
+      for(int i = 0; i < ArraySize(m_records); i++)
       {
-         if(record.symbol != symbol ||
-            (long)StringToInteger(record.magic) != magic ||
-            StringFind(record.comment, setup_prefix) != 0)
+         if(m_records[i].symbol != symbol ||
+            (long)StringToInteger(m_records[i].magic) != magic ||
+            StringFind(m_records[i].comment, setup_prefix) != 0)
             continue;
-         double net = StringToDouble(record.profit) +
-                      StringToDouble(record.commission) +
-                      StringToDouble(record.swap);
+         double net = StringToDouble(m_records[i].profit) +
+                      StringToDouble(m_records[i].commission) +
+                      StringToDouble(m_records[i].swap);
          samples++;
          if(net > 0.0)
             wins++;
       }
-      FileClose(file);
       if(samples < MathMax(1, minimum_sample))
          return true;
       return ((double)wins * 100.0 / samples >= minimum_win_rate);
