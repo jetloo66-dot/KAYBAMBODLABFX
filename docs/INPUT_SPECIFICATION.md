@@ -25,7 +25,7 @@ The parameter declarations in `EA/KAYBAMBODLABFX.mq5` are authoritative. The str
 | 19 | `=== TRENDLINE ===` | `InpTrendlineEnabled=false`; `InpTrendlineWidthPoints=10` | Optional two-pivot linear trendline gate and width in points. |
 | 20 | `=== CONFLUENCE ===` | `InpMinimumConfluenceScore=0` | Minimum weighted signal score; score is a deterministic rule score, not a forecast probability. |
 | 21 | `=== MTF MAPPING ===` | `InpMTFMode=SINGLE`; `InpMinimumConfirmations=1` | SINGLE, MULTIPLE or ALL trend-alignment rule; weighted thresholds are configured in group 4. |
-| 22 | `=== EXECUTION ===` | `InpExecutionMode=MARKET_ONLY`; `InpDeviationPoints=10` | Market/limit/combined/automatic execution and allowed broker deviation. |
+| 22 | `=== EXECUTION ===` | `InpExecutionMode=MARKET_ONLY`; `InpDeviationPoints=10` | Market/limit/combined/automatic execution and allowed broker deviation; combined mode logs when capacity, validity, or broker volume rules downgrade it to market-only. |
 | 23 | `=== DUPLICATE PREVENTION ===` | `InpPreventDuplicateSetups=true` | Persist setup hashes in terminal global variables. |
 | 24 | `=== RISK SIZING ===` | `InpSizingMode=FIXED_LOT`; `InpFixedLots=0.01`; `InpRiskPercent=0.5`; `InpRiskMoney=50` | Fixed, percentage, money or dynamic (currently percentage alias) sizing. Volume is floored to broker step and rejected below minimum. |
 | 25 | `=== POSITION LIMITS ===` | `InpMaxPositionsTotal=1`; `InpMaxPositionsPerSymbol=1`; `InpMaxPendingOrders=3` | Total/symbol caps reserve capacity for both open positions and pending orders; the additional pending cap limits pending orders per symbol. |

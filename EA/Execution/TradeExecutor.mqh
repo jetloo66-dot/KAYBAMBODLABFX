@@ -189,6 +189,9 @@ public:
          }
          double split_market_volume = risk_manager.NormalizeVolume(signal.symbol, market_volume * 0.5);
          bool split = (pending_valid && pending_volume > 0.0 && split_market_volume > 0.0);
+         if(!split)
+            PrintFormat("KBLX MARKET_AND_PENDING downgraded to market-only for %s: pending leg unavailable or below minimum volume",
+                        signal.symbol);
          double final_market_volume = (split ? split_market_volume : market_volume);
          bool market_sent = (signal.direction == KBLX_DIRECTION_BUY
                              ? m_trade.Buy(final_market_volume, signal.symbol, 0.0,

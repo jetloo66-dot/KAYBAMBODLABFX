@@ -21,6 +21,14 @@ private:
    KBLXMemoryRecord m_records[];
    bool m_loaded;
 
+   string SafeCsvField(string value)
+   {
+      StringReplace(value, ",", " ");
+      StringReplace(value, "\r", " ");
+      StringReplace(value, "\n", " ");
+      return value;
+   }
+
    bool ReadRecord(const int file, KBLXMemoryRecord &record)
    {
       if(FileIsEnding(file))
@@ -126,6 +134,8 @@ public:
       LoadRecords();
       if(HasPositionRecord(position_id))
          return;
+      symbol = SafeCsvField(symbol);
+      comment = SafeCsvField(comment);
       int file = FileOpen(m_file_name, FILE_READ | FILE_WRITE | FILE_CSV |
                           FILE_SHARE_READ | FILE_SHARE_WRITE, ',');
       if(file == INVALID_HANDLE)
