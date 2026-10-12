@@ -36,7 +36,9 @@ public:
          return;
       datetime time = 0;
       double volume = 0.0;
-      double net_profit = 0.0;
+      double profit = 0.0;
+      double commission = 0.0;
+      double swap = 0.0;
       string comment = "";
       for(int i = 0; i < HistoryDealsTotal(); i++)
       {
@@ -47,9 +49,9 @@ public:
             continue;
          time = (datetime)MathMax((long)time,
                   HistoryDealGetInteger(history_ticket, DEAL_TIME));
-         net_profit += HistoryDealGetDouble(history_ticket, DEAL_PROFIT) +
-                       HistoryDealGetDouble(history_ticket, DEAL_COMMISSION) +
-                       HistoryDealGetDouble(history_ticket, DEAL_SWAP);
+         profit += HistoryDealGetDouble(history_ticket, DEAL_PROFIT);
+         commission += HistoryDealGetDouble(history_ticket, DEAL_COMMISSION);
+         swap += HistoryDealGetDouble(history_ticket, DEAL_SWAP);
          ENUM_DEAL_ENTRY history_entry =
             (ENUM_DEAL_ENTRY)HistoryDealGetInteger(history_ticket, DEAL_ENTRY);
          if(history_entry == DEAL_ENTRY_IN || history_entry == DEAL_ENTRY_INOUT)
@@ -80,7 +82,7 @@ public:
       }
       FileSeek(file, 0, SEEK_END);
       FileWrite(file, position_id, time, symbol, magic, volume,
-                net_profit, 0.0, 0.0, comment);
+                profit, commission, swap, comment);
       FileClose(file);
    }
 

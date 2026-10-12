@@ -135,18 +135,26 @@ public:
       KBLXSwingPoint first_pivot = swings[first_index];
       KBLXSwingPoint middle_pivot = swings[middle_index];
       KBLXSwingPoint last_pivot = swings[last_index];
-      if(maximum_setup_age > 0 && last_pivot.shift > maximum_setup_age)
-         return false;
 
       MqlRates rates[];
       int requested = MathMax(history_bars, 100);
-      if(!data.GetRates(symbol, timeframe, requested, rates) ||
-         first_pivot.shift >= ArraySize(rates) ||
-         last_pivot.shift >= ArraySize(rates))
+      if(!data.GetRates(symbol, timeframe, requested, rates))
+         return false;
+      int first_rate_shift = -1;
+      int last_rate_shift = -1;
+      for(int shift = 1; shift < ArraySize(rates); shift++)
+      {
+         if(rates[shift].time == first_pivot.pivot_time)
+            first_rate_shift = shift;
+         if(rates[shift].time == last_pivot.pivot_time)
+            last_rate_shift = shift;
+      }
+      if(first_rate_shift < 1 || last_rate_shift < 1 ||
+         (maximum_setup_age > 0 && last_rate_shift > maximum_setup_age))
          return false;
 
       int break_shift = -1;
-      int oldest_after_pivot = MathMin(last_pivot.shift - 1, ArraySize(rates) - 2);
+      int oldest_after_pivot = MathMin(last_rate_shift - 1, ArraySize(rates) - 2);
       for(int shift = oldest_after_pivot; shift >= 1; shift--)
       {
          bool crossed = (direction == KBLX_DIRECTION_BUY
@@ -176,11 +184,11 @@ public:
       int age_since_break = break_shift - 1;
       if(maximum_setup_age > 0 && age_since_break > maximum_setup_age)
          return false;
-      int second_confirmation_shift = first_pivot.shift;
+      int second_confirmation_shift = first_rate_shift;
       bool zone_touch = false;
       datetime retrace_time = 0;
-      double zone_low = rates[first_pivot.shift].low;
-      double zone_high = rates[first_pivot.shift].high;
+      double zone_low = rates[first_rate_shift].low;
+      double zone_high = rates[first_rate_shift].high;
       double point = data.PointSize(symbol);
       double tolerance = MathMax(0.0, tolerance_points) * point;
       double sweep_tolerance = MathMax(0.0, liquidity_sweep_tolerance_points) * point;
@@ -224,7 +232,7 @@ public:
       module[2] = false;
       module[3] = false;
       double targets[4];
-      targets[0] = direction == KBLX_DIRECTION_BUY ? first_pivot.price : first_pivot.price;
+      targets[0] = first_pivot.price;
       targets[1] = 0.0;
       targets[2] = 0.0;
       targets[3] = 0.0;
@@ -282,10 +290,10 @@ public:
          targets[2] = (zone_lows[2] + zone_highs[2]) * 0.5;
       }
       double fib_start = last_pivot.price;
-      if(!fib_use_wicks && last_pivot.shift < ArraySize(rates))
+      if(!fib_use_wicks)
          fib_start = (direction == KBLX_DIRECTION_BUY
-                      ? MathMin(rates[last_pivot.shift].open, rates[last_pivot.shift].close)
-                      : MathMax(rates[last_pivot.shift].open, rates[last_pivot.shift].close));
+                      ? MathMin(rates[last_rate_shift].open, rates[last_rate_shift].close)
+                      : MathMax(rates[last_rate_shift].open, rates[last_rate_shift].close));
       double break_price = rates[break_shift].close;
       double span = MathAbs(break_price - fib_start);
       module[3] = enable_d && fib_ratio > 0.0 && fib_ratio < 1.0 && span > 0.0;
@@ -335,6 +343,8 @@ public:
       if(enable_trendline && swing_count >= 4)
       {
          KBLXSwingPoint line1, line2;
+         line1 = swings[0];
+         line2 = swings[0];
          int lines = 0;
          for(int i = swing_count - 1; i >= 0; i--)
          {
@@ -355,10 +365,13 @@ public:
          }
          if(lines == 2 && line2.pivot_time > line1.pivot_time)
          {
-            double slope = (line2.price - line1.price) /
-                           (double)(line2.pivot_time - line1.pivot_time);
+            double elapsed = (double)line2.pivot_time - (double)line1.pivot_time;
+            if(elapsed <= 0.0)
+               return false;
+            double slope = (line2.price - line1.price) / elapsed;
             double projected = line2.price +
-                               slope * (retrace_time - line2.pivot_time);
+                               slope * ((double)retrace_time -
+                                        (double)line2.pivot_time);
             trendline_gate = (live_price >= projected - trendline_width_points * point &&
                               live_price <= projected + trendline_width_points * point);
          }

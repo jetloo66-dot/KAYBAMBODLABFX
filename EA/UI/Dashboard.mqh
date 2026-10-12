@@ -102,6 +102,45 @@ public:
       m_last_text = text;
    }
 
+   void DrawFrameContext(const bool enabled, const string symbol,
+                         const ENUM_TIMEFRAMES timeframe, const int row,
+                         const KBLXStructure &structure,
+                         const KBLXMarketContext &context)
+   {
+      string name = m_prefix + "FRAME_" + IntegerToString((int)timeframe);
+      if(!enabled)
+      {
+         ObjectDelete(0, name);
+         return;
+      }
+      string trend = "NEUTRAL";
+      if(structure.trend == KBLX_TREND_UP) trend = "UP";
+      if(structure.trend == KBLX_TREND_DOWN) trend = "DOWN";
+      if(structure.trend == KBLX_TREND_TRANSITION) trend = "TRANSITION";
+      int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+      string demand = (context.demand.valid
+                       ? StringFormat("%.*f-%.*f", digits, context.demand.low,
+                                      digits, context.demand.high) : "n/a");
+      string supply = (context.supply.valid
+                       ? StringFormat("%.*f-%.*f", digits, context.supply.low,
+                                      digits, context.supply.high) : "n/a");
+      string volume = (context.volume_zone.valid
+                       ? StringFormat("%.*f", digits, context.volume_price) : "n/a");
+      string text = StringFormat("%s %s D:%s S:%s V:%s",
+                                 EnumToString(timeframe), trend,
+                                 demand, supply, volume);
+      if(ObjectFind(0, name) < 0)
+         ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
+      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, 10);
+      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, 20 + row * 18);
+      ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);
+      ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 8);
+      ObjectSetString(0, name, OBJPROP_FONT, "Consolas");
+      ObjectSetString(0, name, OBJPROP_TEXT, text);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   }
+
    void DrawSwings(const bool enabled, const KBLXSwingPoint &swings[], const int count)
    {
       int shown = (enabled ? MathMin(count, 20) : 0);
@@ -131,61 +170,63 @@ public:
                break;
             }
          }
-
-         void DrawSignal(const KBLXSignal &signal, const KBLXMarketContext &context,
-                         const double stop, const double target)
-         {
-            for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
-            {
-               string name = ObjectName(0, i);
-               if(StringFind(name, m_prefix + "SETUP_") == 0)
-                  ObjectDelete(0, name);
-            }
-            string key = StringFormat("%I64d_%I64d_%c",
-               (long)signal.first_pivot_time, (long)signal.last_pivot_time,
-               signal.direction == KBLX_DIRECTION_BUY ? 'B' : 'S');
-            color setup_color = (signal.direction == KBLX_DIRECTION_BUY
-                                 ? clrDodgerBlue : clrTomato);
-            string base = m_prefix + "SETUP_" + key + "_";
-            DrawText(base + "1", signal.first_pivot_time, signal.first_pivot_price,
-                     "1", setup_color);
-            DrawText(base + "2", signal.middle_pivot_time, signal.middle_pivot_price,
-                     "2", setup_color);
-            DrawText(base + "3", signal.last_pivot_time, signal.last_pivot_price,
-                     "3", setup_color);
-            DrawText(base + "BREAK", signal.break_time, signal.middle_pivot_price,
-                     signal.break_type == KBLX_BREAK_BOS ? "BOS" : "CHOCH", clrGold);
-            DrawText(base + "RETRACE", signal.retracement_time, signal.entry,
-                     "Retrace", clrAqua);
-            DrawSegment(base + "LINE1", signal.first_pivot_time, signal.first_pivot_price,
-                        signal.middle_pivot_time, signal.middle_pivot_price, setup_color);
-            DrawSegment(base + "LINE2", signal.middle_pivot_time, signal.middle_pivot_price,
-                        signal.last_pivot_time, signal.last_pivot_price, setup_color);
-            DrawSegment(base + "LINE3", signal.last_pivot_time, signal.last_pivot_price,
-                        signal.break_time, signal.middle_pivot_price, clrGold);
-            DrawSegment(base + "LINE4", signal.break_time, signal.middle_pivot_price,
-                        signal.retracement_time, signal.entry, clrAqua);
-            DrawZone(base + "TRADE_ZONE", signal.zone, setup_color);
-            DrawZone(base + "DEMAND", context.demand, clrSeaGreen);
-            DrawZone(base + "SUPPLY", context.supply, clrIndianRed);
-            DrawZone(base + "VOLUME", context.volume_zone, clrDarkGoldenrod);
-
-            string sl_name = base + "SL";
-            string tp_name = base + "TP";
-            if(ObjectFind(0, sl_name) < 0) ObjectCreate(0, sl_name, OBJ_HLINE, 0, 0, stop);
-            if(ObjectFind(0, tp_name) < 0) ObjectCreate(0, tp_name, OBJ_HLINE, 0, 0, target);
-            ObjectSetDouble(0, sl_name, OBJPROP_PRICE, stop);
-            ObjectSetDouble(0, tp_name, OBJPROP_PRICE, target);
-            ObjectSetInteger(0, sl_name, OBJPROP_COLOR, clrRed);
-            ObjectSetInteger(0, tp_name, OBJPROP_COLOR, clrLimeGreen);
-            ObjectSetInteger(0, sl_name, OBJPROP_STYLE, STYLE_DASH);
-            ObjectSetInteger(0, tp_name, OBJPROP_STYLE, STYLE_DASH);
-            ObjectSetInteger(0, sl_name, OBJPROP_SELECTABLE, false);
-            ObjectSetInteger(0, tp_name, OBJPROP_SELECTABLE, false);
-         }
          if(!retained)
             ObjectDelete(0, name);
       }
+   }
+
+   void DrawSignal(const KBLXSignal &signal, const KBLXMarketContext &context,
+                   const double stop, const double target)
+   {
+      for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
+      {
+         string name = ObjectName(0, i);
+         if(StringFind(name, m_prefix + "SETUP_") == 0)
+            ObjectDelete(0, name);
+      }
+      string key = StringFormat("%I64d_%I64d_%c",
+         (long)signal.first_pivot_time, (long)signal.last_pivot_time,
+         signal.direction == KBLX_DIRECTION_BUY ? 'B' : 'S');
+      color setup_color = (signal.direction == KBLX_DIRECTION_BUY
+                           ? clrDodgerBlue : clrTomato);
+      string base = m_prefix + "SETUP_" + key + "_";
+      DrawText(base + "1", signal.first_pivot_time, signal.first_pivot_price,
+               "1", setup_color);
+      DrawText(base + "2", signal.middle_pivot_time, signal.middle_pivot_price,
+               "2", setup_color);
+      DrawText(base + "3", signal.last_pivot_time, signal.last_pivot_price,
+               "3", setup_color);
+      DrawText(base + "BREAK", signal.break_time, signal.middle_pivot_price,
+               signal.break_type == KBLX_BREAK_BOS ? "BOS" : "CHOCH", clrGold);
+      DrawText(base + "RETRACE", signal.retracement_time, signal.entry,
+               "Retrace", clrAqua);
+      DrawSegment(base + "LINE1", signal.first_pivot_time, signal.first_pivot_price,
+                  signal.middle_pivot_time, signal.middle_pivot_price, setup_color);
+      DrawSegment(base + "LINE2", signal.middle_pivot_time, signal.middle_pivot_price,
+                  signal.last_pivot_time, signal.last_pivot_price, setup_color);
+      DrawSegment(base + "LINE3", signal.last_pivot_time, signal.last_pivot_price,
+                  signal.break_time, signal.middle_pivot_price, clrGold);
+      DrawSegment(base + "LINE4", signal.break_time, signal.middle_pivot_price,
+                  signal.retracement_time, signal.entry, clrAqua);
+      DrawZone(base + "TRADE_ZONE", signal.zone, setup_color);
+      DrawZone(base + "DEMAND", context.demand, clrSeaGreen);
+      DrawZone(base + "SUPPLY", context.supply, clrIndianRed);
+      DrawZone(base + "VOLUME", context.volume_zone, clrDarkGoldenrod);
+
+      string sl_name = base + "SL";
+      string tp_name = base + "TP";
+      if(ObjectFind(0, sl_name) < 0)
+         ObjectCreate(0, sl_name, OBJ_HLINE, 0, 0, stop);
+      if(ObjectFind(0, tp_name) < 0)
+         ObjectCreate(0, tp_name, OBJ_HLINE, 0, 0, target);
+      ObjectSetDouble(0, sl_name, OBJPROP_PRICE, stop);
+      ObjectSetDouble(0, tp_name, OBJPROP_PRICE, target);
+      ObjectSetInteger(0, sl_name, OBJPROP_COLOR, clrRed);
+      ObjectSetInteger(0, tp_name, OBJPROP_COLOR, clrLimeGreen);
+      ObjectSetInteger(0, sl_name, OBJPROP_STYLE, STYLE_DASH);
+      ObjectSetInteger(0, tp_name, OBJPROP_STYLE, STYLE_DASH);
+      ObjectSetInteger(0, sl_name, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, tp_name, OBJPROP_SELECTABLE, false);
    }
 
    void Cleanup()

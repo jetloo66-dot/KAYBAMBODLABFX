@@ -12,7 +12,7 @@
 | Period targets | PARTIAL | Realized server-time minute/hour/session/day P/L blocks new entries. Open positions are not force-closed, and percentage target basis needs broker validation. |
 | News/session/spread | PARTIAL | Native high-impact calendar for base/quote currency, server-time day/session and spread checks. Calendar coverage and Strategy Tester support are broker-dependent; enabled lookup errors fail closed. |
 | Alerts | PARTIAL | Signal alerts to MT5, optional push and opt-in Telegram. Not all fills, modifications, partials, rejections and close events have dedicated notifications. Token/chat values are runtime-only and excluded from logs/UI. |
-| Dashboard | PARTIAL | Status/trend, swing arrows, accepted setup pivots/break/retrace connector, context zones, SL and final TP use own-prefix objects. Account analytics and all active setup overlays are not shown. |
+| Dashboard | PARTIAL | Status/trend, per-frame demand/supply/volume summary, swing arrows, accepted setup pivots/break/retrace connector, zones, SL and final TP use own-prefix objects. Account analytics are not shown. |
 | Stage 1–2 regression | PASS (static review) | No prior-stage source was removed; cannot execute an MT5 regression backtest here. |
 
 **Stage 3 conclusion:** Basic order/risk/position management is in place, but this is not a broker-certified production release. Validate on a demo account before any live use.

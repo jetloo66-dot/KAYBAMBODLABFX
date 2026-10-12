@@ -248,7 +248,7 @@ input group "=== DEBUG ==="
 input bool InpDebug = false;
 
 CKBLXMarketData g_market_data;
-CKBLXStructureEngine g_structure_engines[32][7];
+CKBLXStructureEngine g_structure_engines[224];
 CKBLXContextEngine g_context_engine;
 CKBLXSignalEngine g_signal_engine;
 CKBLXTradingFilters g_filters;
@@ -640,7 +640,8 @@ void ScanMarkets()
             if(minimum_swing_points < 0.0 || equal_swing_points < 0.0 ||
               zone_buffer_points < 0.0 || volume_bin_points < 0.0)
               continue;
-            bool structure_ok = g_structure_engines[symbol_slot][frame].Update(
+            int engine_index = symbol_slot * 7 + frame;
+            bool structure_ok = g_structure_engines[engine_index].Update(
               g_market_data, symbol, timeframe,
               MathMin(InpHistoryBars, InpSwingLookback),
               InpSwingStrength, InpMaximumSwingAgeBars,
@@ -661,6 +662,12 @@ void ScanMarkets()
 
       if(symbol == _Symbol)
       {
+         for(int frame = 0; frame < 7; frame++)
+            g_dashboard.DrawFrameContext(
+               InpDashboardEnabled && FrameScanned(frame), symbol,
+               FrameTimeframe(frame), frame,
+               g_frame_structures[symbol_slot][frame],
+               g_frame_contexts[symbol_slot][frame]);
          int chart_frame = 2;
          for(int frame = 0; frame < 7; frame++)
             if(FrameTimeframe(frame) == (ENUM_TIMEFRAMES)_Period &&
@@ -669,7 +676,7 @@ void ScanMarkets()
          g_chart_structure = g_frame_structures[symbol_slot][chart_frame];
          KBLXSwingPoint chart_swings[];
          ArrayResize(chart_swings, 32);
-         int count = g_structure_engines[symbol_slot][chart_frame].GetSwings(chart_swings, 20);
+         int count = g_structure_engines[symbol_slot * 7 + chart_frame].GetSwings(chart_swings, 20);
          g_dashboard.DrawSwings(InpDrawSwings, chart_swings, count);
       }
       if(!InpAllowTrading || !InpEnableReversals)
@@ -693,7 +700,7 @@ void ScanMarkets()
             trendline_width < 0.0)
             continue;
          if(!g_signal_engine.Analyze(
-              g_market_data, g_structure_engines[symbol_slot][frame],
+              g_market_data, g_structure_engines[symbol_slot * 7 + frame],
               symbol, timeframe, structure, InpHistoryBars, InpBreakSelection,
               InpRequireLiquiditySweep, sweep_tolerance,
               InpEnableRetraceB, InpEnableRetraceC, InpEnableRetraceD,
