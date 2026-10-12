@@ -204,20 +204,27 @@ public:
       double live_price = (direction == KBLX_DIRECTION_BUY ? tick.ask : tick.bid);
       if(require_closed_retrace)
       {
-         int shift = 1;
-         bool beyond_invalidation =
-            (direction == KBLX_DIRECTION_BUY
-            ? rates[shift].low <= last_pivot.price
-            : rates[shift].high >= last_pivot.price);
-         if(shift < break_shift && !beyond_invalidation &&
-            Touches(rates[shift],
-                    direction == KBLX_DIRECTION_BUY ? zone_low : zone_high,
-                    tolerance))
+         for(int shift = break_shift - 1; shift >= 1; shift--)
          {
-            zone_touch = true;
-            retrace_time = rates[shift].time;
-            second_confirmation_shift = shift;
+            bool beyond_invalidation =
+              (direction == KBLX_DIRECTION_BUY
+               ? rates[shift].low <= last_pivot.price
+               : rates[shift].high >= last_pivot.price);
+            if(!beyond_invalidation &&
+              Touches(rates[shift],
+                       direction == KBLX_DIRECTION_BUY ? zone_low : zone_high,
+                       tolerance))
+            {
+              zone_touch = true;
+              retrace_time = rates[shift].time;
+              second_confirmation_shift = shift;
+              break;
+            }
          }
+         zone_touch = zone_touch &&
+            (direction == KBLX_DIRECTION_BUY
+            ? live_price <= zone_low + tolerance && live_price > last_pivot.price
+            : live_price >= zone_high - tolerance && live_price < last_pivot.price);
       }
       else if((direction == KBLX_DIRECTION_BUY
                ? live_price <= zone_low + tolerance &&

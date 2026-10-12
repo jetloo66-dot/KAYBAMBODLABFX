@@ -58,6 +58,25 @@ private:
       return (current_sl > 0.0 ? MathAbs(open_price - current_sl) : 0.0);
    }
 
+   void CleanupOrphanedState()
+   {
+      for(int i = GlobalVariablesTotal() - 1; i >= 0; i--)
+      {
+         string name = GlobalVariableName(i);
+         if(StringFind(name, "KBLX_R_") != 0 &&
+            StringFind(name, "KBLX_P_") != 0 &&
+            StringFind(name, "KBLX_V_") != 0)
+            continue;
+         int separator = StringFind(name, "_", 7);
+         string ticket_text = (separator < 0
+                               ? StringSubstr(name, 7)
+                               : StringSubstr(name, 7, separator - 7));
+         ulong ticket = (ulong)StringToInteger(ticket_text);
+         if(ticket == 0 || !PositionSelectByTicket(ticket))
+            GlobalVariableDel(name);
+      }
+   }
+
 public:
    void Configure(const long magic)
    {
@@ -230,6 +249,7 @@ public:
             PrintFormat("KBLX position modification failed (%u): %s",
                         modify_retcode, m_trade.ResultRetcodeDescription());
       }
+      CleanupOrphanedState();
    }
 };
 

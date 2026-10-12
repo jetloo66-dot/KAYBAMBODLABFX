@@ -170,7 +170,10 @@ public:
          pending_signal.entry = pending_price;
          double pending_stop = 0.0, pending_target = 0.0;
          double pending_volume = 0.0;
-         bool pending_valid = (pending_time_valid &&
+         bool pair_capacity =
+            CountOwned("", false) + 2 <= m_max_positions_total &&
+            CountOwned(signal.symbol, false) + 2 <= m_max_positions_symbol;
+         bool pending_valid = (pair_capacity && pending_time_valid &&
             CountOwned(signal.symbol, true) < m_max_pending) &&
             risk_manager.BuildStops(
             data, pending_signal, stop_mode, stop_points, stop_buffer_points,

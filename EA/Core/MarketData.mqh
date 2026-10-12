@@ -91,9 +91,9 @@ public:
          m_cache[slot].refreshed = TimeCurrent();
       }
 
-      ArrayResize(out, m_cache[slot].count);
+      ArrayResize(out, requested);
       ArraySetAsSeries(out, true);
-      if(ArrayCopy(out, m_cache[slot].rates, 0, 0, m_cache[slot].count) != m_cache[slot].count)
+      if(ArrayCopy(out, m_cache[slot].rates, 0, 0, requested) != requested)
          return false;
       return true;
    }
