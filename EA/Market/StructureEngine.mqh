@@ -113,7 +113,7 @@ public:
          KBLXSwingPoint pivot;
          pivot.shift = shift;
          pivot.pivot_time = rates[shift].time;
-         pivot.confirmed_time = rates[1].time;
+         pivot.confirmed_time = rates[shift - strength].time;
 
          if(is_high)
          {

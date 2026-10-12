@@ -3,7 +3,7 @@
 ## Static compile audit
 
 * MetaEditor/MQL5 compiler and terminal were unavailable. **Compilation is unverified**; no `.ex5` binary is provided.
-* A static repository check found 34 input groups, all local quoted include paths resolve, braces are balanced, and no TODO/FIXME/stub markers are present under `EA/`. This is not a substitute for compiler diagnostics.
+* The EA exposes 34 input groups; the follow-up received delimiter/input-reference checks and `git diff --check`. These are not substitutes for compiler diagnostics.
 * Compile-risk APIs to verify in MetaEditor include the broker-calendar functions (`CalendarValueHistory`, `CalendarEventById`), symbol expiration flags, `CTrade::PositionClosePartial`, and local include resolution when installed under `MQL5/Experts`.
 * No Strategy Tester, demo execution, profitability, 80% accuracy, or drawdown assertion is claimed.
 
@@ -12,7 +12,7 @@
 | Component | Buy | Sell | Symmetrical? |
 |---|---|---|---|
 | Reversal pivots | LL2 < LH2, then LL1 < LL2 | HH2 > HL2, then HH1 > HH2 | Yes; price/time inequalities mirror |
-| BOS/CHOCH break | Close/ask above middle high | Close/bid below middle low | Yes; close/intrabar modes differ only by side quote |
+| BOS/CHOCH break | Closed-bar cross above middle high | Closed-bar cross below middle low | Yes; shift-based comparisons mirror |
 | Liquidity extension | LL1 extends below LL2 | HH1 extends above HH2 | Yes |
 | A retracement | Return to LL2 | Return to HH2 | Yes |
 | B engulf | Bearish body/wick engulfs bullish candle | Bullish body/wick engulfs bearish candle | Yes |
@@ -25,8 +25,8 @@
 ## Look-ahead and duplicate-order audits
 
 * Swing pivots require all `SwingStrength` newer neighboring bars to be closed; forming bar 0 is not used to confirm them.
-* Close-only BOS uses `rates[1]`. Intrabar mode intentionally uses live Bid/Ask and is not equivalent to a closed-bar confirmation.
-* Engulf/retracement candle scanning excludes bar 0. Calendar events are obtained from the native API and never synthesized.
+* BOS/CHOCH confirmation searches closed rates only. Entry retracement uses live price by default, after the confirmed break; optional retracement modules use bounded historical data.
+* Swing confirmation excludes the forming bar. Calendar events are obtained from the native API and never synthesized.
 * Setup IDs use symbol, primary period, direction and both reversal pivot timestamps, so they do not change on each later bar. A terminal Global Variable is written after an accepted market/pending operation. Hash collisions are theoretically possible; broker restart/race testing is still required.
 
 ## Risk audit
@@ -34,8 +34,8 @@
 * Position size for percentage/money risk uses `OrderCalcProfit` for a one-lot loss to the proposed stop; volume is floored to broker step and rejected below minimum.
 * Price normalization uses tick size and digits. Long protective stops and targets round away from greater risk; short prices mirror the rounding.
 * SL checks stop/freeze distance. Pending entries also check order-side geometry and broker expiration support.
-* One RR/structure/Fibonacci/manual target is attached. Optional partials occur at R stages; no separate TP1–TP5 order ladder exists.
-* Daily limits sum realized deals for this magic and stop new entries only. They do not include floating P/L or close positions.
+* One final RR/structure/Fibonacci/manual target is attached. Configured intermediate R targets trigger partial closes; there are no separate broker-side TP1–TP5 orders.
+* P&L windows sum realized deals for this magic and stop new entries only. They do not include floating P/L or close positions.
 
 ## Broker compatibility and restart
 
@@ -63,10 +63,10 @@ The issue body did not include the referenced numbered “section 70” checklis
 |---|---|---|
 | Canonical modular native EA and migration notes; legacy retained | PARTIAL | New tree and migration map exist; compiler and broker certification remain |
 | Stage 0 requirements/ambiguity/architecture/state/input docs | DONE | Documents added; 34 group labels are explicitly reconstructed because the issue does not name them |
-| Stage 1 data, confirmed swings, structure/trend, visualization | PARTIAL | Core algorithms implemented; full visualization and live validation remain |
-| Stage 2 reversal, BOS/CHOCH, four retracements, MTF and signal object | PARTIAL | Core path present; lifecycle zones, complete mapping and replay validation remain |
-| Stage 3 execution, risk, management, filters, alerts, dashboard | PARTIAL | Basic implementation present; retry, full limits, event coverage and dashboard sections remain |
-| Stage 4 memory, analytics, optimization, restart recovery | PARTIAL | CSV and basic performance gate only; complete metrics and pending recovery remain |
+| Stage 1 data, confirmed swings, structure/trend, visualization | PARTIAL | Core algorithms implemented; live validation remains |
+| Stage 2 reversal, BOS/CHOCH, retracement, seven-frame MTF and signal object | PARTIAL | Sequence/retrace and frame mapping are wired; replay validation and complete zone lifecycle remain |
+| Stage 3 execution, risk, management, filters, alerts, dashboard | PARTIAL | Execution/risk/period gates and setup drawings are wired; broker testing, retries, full lifecycle alerts and account analytics remain |
+| Stage 4 memory, analytics, optimization, restart recovery | PARTIAL | Completed-position setup-tag journal and deterministic performance gate; complete metrics and pending recovery remain |
 | No look-ahead, unique prefix, no hardcoded credential, no MQL4 API in canonical tree | PASS (static review) | See audits above; legacy files are unchanged |
 | Compile/backtest/profitability and 80% accuracy evidence | NOT VERIFIED | No MetaEditor/MT5 tester or broker data was available; no performance claim is made |
 

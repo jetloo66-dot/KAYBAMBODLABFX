@@ -8,7 +8,8 @@ EA/
   Core/Types.mqh                 enums, settings-facing value objects, signal types
   Core/MarketData.mqh            bounded rate cache, symbol metadata, new-bar clock
   Market/StructureEngine.mqh     confirmed pivots, typed swing history, trend state
-  Strategy/SignalEngine.mqh      reversal, BOS/CHOCH, retracement, MTF signal analysis
+  Market/ContextEngine.mqh       local pivot demand/supply and tick-volume price bins
+  Strategy/SignalEngine.mqh      reversal sequence, close break and LL2/HH2 retracement
   Filters/TradingFilters.mqh     sessions, spread, trading days, economic calendar
   Risk/RiskManager.mqh           sizing, volume normalization, SL/TP and limits
   Execution/TradeExecutor.mqh    CTrade validation, duplicate guard, order submission
@@ -28,17 +29,18 @@ MIGRATION_NOTES.md
 
 | Module | Responsibility | Depends on |
 |---|---|---|
-| Entry EA | Inputs, initialization, timer/tick separation, orchestration | All modules |
+| Entry EA | Inputs, seven-frame cache orchestration, context gates and execution cadence | All modules |
 | Core types | Direction, structure, zone, setup/signal value records | None |
 | Market data | `MqlRates` retrieval/cache, symbol tick properties, bar timestamps | Core types |
 | Structure | Pivots with confirmation time, HH/HL/LH/LL histories, trend classification | Core types, market data |
-| Signal strategy | Reversal sequence, breaks, four retracements, primary gate, MTF confluence | Core types, structure, market data |
+| Context engine | Confirmed pivot-candle zones and approximate typical-price tick-volume node | Core types, structure, market data |
+| Signal strategy | Reversal sequence, closed-bar break, pivot-edge retracement and optional modules | Core types, structure, market data |
 | Filters | Session/day/spread/news eligibility | Core types, market data/calendar API |
 | Risk | Volume and protective levels/limits | Core types, symbol properties |
 | Execution | CTrade send/cancel, validation and idempotency | Core types, risk, filters |
 | Management | Open-position stop and partial-profit maintenance | Execution, risk |
 | Alerts/UI | Notifications and own-prefixed chart objects | Core types |
-| Analytics | Durable local trade records and summary statistics | Core types, terminal trade history |
+| Analytics | Completed-position local journal and optional setup-aware win-rate gate | Core types, terminal trade history |
 
 The expected dependency direction is entry → orchestration/services → value types; strategy does not send orders. Strategy emits an analytical `Signal`; execution consumes a validated signal. Risk and filters can veto execution but do not alter structural classification.
 
@@ -47,16 +49,17 @@ The expected dependency direction is entry → orchestration/services → value 
 * `SwingPoint`: type, price, pivot time, confirmation time, source bar shift.
 * `StructureSnapshot`: ordered recent highs/lows, HH/HL/LH/LL histories, trend state, protected levels.
 * `Zone`: type, low/high, creation/expiry time, mitigation and invalidation state.
-* `Signal`: stable setup ID, symbol, direction, primary/confirmation TFs, break type/level, chosen retracement, zone, score, timestamp.
-* `TradeRecord`: setup context, execution costs, stop/target, realized result, MFE/MAE, R multiple and duration.
+* `Signal`: stable setup ID, symbol, direction/timeframe, three pivot prices/times, break type/time, retracement time, zone and score.
+* `MarketContext`: local demand/supply candle zones, approximate tick-volume node, average volume and structure trend.
+* `TradeRecord`: position ID, close time, symbol/magic, entry setup tag and net realized result; execution-cost/MFE/MAE fields are not currently collected.
 
 ## Execution cadence
 
-1. Initialization validates inputs, loads symbol metadata, initializes trade/UI services, and reconciles existing positions/orders.
-2. `OnTimer`/new-bar path refreshes bounded market data, then structure, trend, zones and analytical signals once per configured timeframe bar.
-3. Tick path manages existing positions and handles selected intrabar-entry policy; it does not rescan full history.
+1. Initialization validates inputs and configures execution, market-data, management, alert and timer services.
+2. Each scan updates seven selected structure/context frames on new bars, then evaluates configured entry frames.
+3. Optional tick path re-evaluates the bounded historical setup and current retracement quote; timer path scans when tick scanning is disabled.
 4. Before order send, filters, duplicate guard, limits, risk sizing, price/volume and broker stop/freeze rules are rechecked.
-5. Trade transactions update memory and alerts. EA-owned objects and magic-number positions are the only resources managed.
+5. Trade transactions update completed-position memory when enabled. Magic-number positions are managed; chart objects use the `KBLX_` prefix.
 
 ## Stage status
 

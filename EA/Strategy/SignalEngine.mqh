@@ -30,11 +30,14 @@ public:
                 const string symbol, const ENUM_TIMEFRAMES timeframe,
                 const KBLXStructure &structure, const int history_bars,
                 const KBLXBreakSelection break_selection,
+                const bool require_liquidity_sweep,
+                const double liquidity_sweep_tolerance_points,
                 const bool enable_b, const bool enable_c, const bool enable_d,
                 const KBLXRetracementMode retrace_mode,
                 const int required_retracements, const double tolerance_points,
                 const double fib_ratio, const bool fib_use_wicks,
                 const bool require_primary_gate,
+                const KBLXPrimaryGateMode primary_gate_mode,
                 const int maximum_setup_age, const int zone_expiry_bars,
                 const bool engulf_body_only, const double fib_gate_ratio,
                 const bool enable_trendline, const double trendline_width_points,
@@ -180,6 +183,13 @@ public:
       double zone_high = rates[first_pivot.shift].high;
       double point = data.PointSize(symbol);
       double tolerance = MathMax(0.0, tolerance_points) * point;
+      double sweep_tolerance = MathMax(0.0, liquidity_sweep_tolerance_points) * point;
+      if(require_liquidity_sweep &&
+         ((direction == KBLX_DIRECTION_BUY &&
+           first_pivot.price - last_pivot.price < sweep_tolerance) ||
+          (direction == KBLX_DIRECTION_SELL &&
+           last_pivot.price - first_pivot.price < sweep_tolerance)))
+         return false;
       MqlTick tick;
       if(!SymbolInfoTick(symbol, tick) || point <= 0.0)
          return false;
@@ -188,15 +198,18 @@ public:
       {
          int shift = 1;
          if(shift < break_shift &&
-            Intersects(rates[shift], zone_low, zone_high, tolerance))
+            Touches(rates[shift],
+                    direction == KBLX_DIRECTION_BUY ? zone_low : zone_high,
+                    tolerance))
          {
             zone_touch = true;
             retrace_time = rates[shift].time;
             second_confirmation_shift = shift;
          }
       }
-      else if(live_price >= zone_low - tolerance &&
-              live_price <= zone_high + tolerance)
+      else if(MathAbs(live_price -
+                      (direction == KBLX_DIRECTION_BUY ? zone_low : zone_high))
+              <= tolerance)
       {
          zone_touch = true;
          retrace_time = rates[0].time;

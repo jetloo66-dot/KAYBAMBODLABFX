@@ -2,8 +2,8 @@
 
 | Component | Result | Evidence / limitation |
 |---|---|---|
-| Trade memory | PARTIAL | Appends close-deal ticket/time/symbol/magic/volume/profit/commission/swap/comment to a local CSV. Does not record all requested setup, spread, MFE/MAE, duration or R fields. |
-| Performance analyzer | PARTIAL | Optional disabled-by-default sample-gated win-rate check per symbol/magic from recorded deals. No expectancy, profit factor, drawdown, streak, setup, TF or session summaries. |
+| Trade memory | PARTIAL | Stores completed-position outcome and entry setup tag (symbol, magic, direction/timeframe in compact order comment) in local CSV. No spread, MFE/MAE, duration or R fields. |
+| Performance analyzer | PARTIAL | Optional disabled-by-default sample/win-rate gate by symbol, magic, direction and timeframe. No expectancy, profit factor, drawdown, streak or session summaries. |
 | Learning semantics | PASS (static review) | No ML or adaptive rule mutation is claimed; performance gating is deterministic. |
 | Optimization hardening | PARTIAL | Initialization rejects invalid ranges/combinations; requires strategy-specific ranges and out-of-sample testing not available here. |
 | Performance hardening | PARTIAL | Analysis runs on timer/new-bar changes and uses bounded cached rates; strategy arrays rebuild when analyzed. No indicator handles are allocated. |

@@ -26,7 +26,7 @@ public:
    {
       double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
       if(point <= 0.0 || distance < 0.0)
-         return 0.0;
+         return -1.0;
       if(mode == KBLX_UNITS_POINTS)
          return distance * point;
       bool forex = false;
@@ -37,7 +37,7 @@ public:
          forex = IsCurrencyCode(base) && IsCurrencyCode(quote);
       }
       if(mode == KBLX_UNITS_PIPS && !forex)
-         return 0.0;
+         return -1.0;
       if(mode == KBLX_UNITS_AUTO && !forex)
          return distance * point;
       long digits = SymbolInfoInteger(symbol, SYMBOL_DIGITS);
@@ -107,7 +107,9 @@ public:
          return false;
       double stop_distance = DistancePrice(symbol, fixed_points, distance_units);
       double buffer_distance = DistancePrice(symbol, buffer_points, distance_units);
-      if(stop_distance <= 0.0 || buffer_distance < 0.0)
+      if(buffer_distance < 0.0 ||
+         (mode == KBLX_SL_FIXED_DISTANCE && stop_distance <= 0.0) ||
+         (stop_distance < 0.0))
          return false;
 
       if(mode == KBLX_SL_MANUAL)

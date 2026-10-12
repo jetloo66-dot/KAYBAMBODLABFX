@@ -83,6 +83,7 @@ input int InpMaxCacheAgeSeconds = 5;
 input group "=== SWING ==="
 input int InpSwingStrength = 2;
 input int InpSwingLookback = 200;
+input KBLXDistanceUnitMode InpMarketDistanceUnits = KBLX_UNITS_AUTO;
 input double InpMinimumSwingDistancePoints = 0.0;
 input int InpMaximumSwingAgeBars = 100;
 input double InpEqualSwingTolerancePoints = 0.0;
@@ -119,6 +120,7 @@ input group "=== RETRACEMENT D ==="
 input bool InpEnableRetraceD = true;
 input double InpFibRatio = 0.618;
 input bool InpFibUseWicks = true;
+input double InpSecondaryFibRatio = 0.5;
 
 input group "=== RETRACEMENT COMBINATION ==="
 input KBLXRetracementMode InpRetraceMode = KBLX_RETRACE_ANY;
@@ -131,9 +133,6 @@ input KBLXPrimaryGateMode InpPrimaryGateMode = KBLX_PRIMARY_GATE_ANY;
 input group "=== ZONES ==="
 input double InpZoneBufferPoints = 5.0;
 input int InpZoneExpiryBars = 100;
-
-input group "=== FIBONACCI ==="
-input double InpSecondaryFibRatio = 0.5;
 
 input group "=== TRENDLINE ==="
 input bool InpTrendlineEnabled = false;
@@ -185,13 +184,13 @@ input double InpTP_R2 = 1.0;
 input double InpTP_R3 = 3.0;
 input double InpTP_R4 = 4.0;
 input double InpTP_R5 = 5.0;
+
+input group "=== PARTIAL PROFITS ==="
 input double InpTP_Partial1Percent = 25.0;
 input double InpTP_Partial2Percent = 25.0;
 input double InpTP_Partial3Percent = 0.0;
 input double InpTP_Partial4Percent = 0.0;
 input double InpTP_Partial5Percent = 0.0;
-
-input group "=== PARTIAL PROFITS ==="
 
 input group "=== BREAK EVEN / TRAILING ==="
 input bool InpBreakEvenEnabled = true;
@@ -287,6 +286,7 @@ bool ValidateInputs()
       InpFibRatio <= 0.0 || InpFibRatio >= 1.0 ||
       InpSecondaryFibRatio <= 0.0 || InpSecondaryFibRatio >= 1.0 ||
       InpRiskPercent < 0.0 || InpRiskMoney < 0.0 ||
+      InpRiskPercent > 100.0 ||
       InpFixedLots <= 0.0 || InpMinimumConfluenceScore < 0.0 ||
       InpRetraceATolerancePoints < 0.0 || InpZoneBufferPoints < 0.0 ||
       InpMinimumSwingDistancePoints < 0.0 || InpEqualSwingTolerancePoints < 0.0 ||
@@ -299,28 +299,64 @@ bool ValidateInputs()
       InpProfitTargetPercent < 0.0 || InpLossLimitPercent < 0.0 ||
       InpSessionStartHour < 0 || InpSessionStartHour > 23 ||
       InpSessionEndHour < 0 || InpSessionEndHour > 23 ||
-      InpSessionProfitLimitMoney < 0.0 || InpSessionLossLimitMoney < 0.0)
+      InpSessionProfitLimitMoney < 0.0 || InpSessionLossLimitMoney < 0.0 ||
+      InpBreakSelection < KBLX_CHOCH_ONLY ||
+      InpBreakSelection > KBLX_CHOCH_AND_BOS ||
+      InpMTFMode < KBLX_MTF_SINGLE || InpMTFMode > KBLX_MTF_ALL ||
+      InpExecutionMode < KBLX_MARKET_ONLY ||
+      InpExecutionMode > KBLX_AUTO_EXECUTION ||
+      InpStopDistanceUnits < KBLX_UNITS_AUTO ||
+      InpStopDistanceUnits > KBLX_UNITS_PIPS ||
+      InpMarketDistanceUnits < KBLX_UNITS_AUTO ||
+      InpMarketDistanceUnits > KBLX_UNITS_PIPS ||
+      InpManagementDistanceUnits < KBLX_UNITS_AUTO ||
+      InpManagementDistanceUnits > KBLX_UNITS_PIPS ||
+      InpSizingMode < KBLX_FIXED_LOT || InpSizingMode > KBLX_DYNAMIC_RISK ||
+      InpStopMode < KBLX_SL_FIXED_DISTANCE || InpStopMode > KBLX_SL_HYBRID ||
+      InpTakeProfitMode < KBLX_TP_RR || InpTakeProfitMode > KBLX_TP_MANUAL ||
+      InpRetraceMode < KBLX_RETRACE_ANY ||
+      InpRetraceMode > KBLX_RETRACE_CONFLUENCE_REQUIRED ||
+      InpPrimaryGateMode < KBLX_PRIMARY_GATE_ANY ||
+      InpPrimaryGateMode > KBLX_PRIMARY_GATE_ALL ||
+      InpLimitPeriod < KBLX_LIMIT_MINUTES || InpLimitPeriod > KBLX_LIMIT_DAY)
       return false;
    ENUM_TIMEFRAMES frames[7];
    frames[0] = InpTF_D1; frames[1] = InpTF_H4; frames[2] = InpTF_H1;
    frames[3] = InpTF_M30; frames[4] = InpTF_M15; frames[5] = InpTF_M5;
    frames[6] = InpTF_M1;
    bool scans[7];
+   bool trades[7];
    scans[0] = InpScanD1; scans[1] = InpScanH4; scans[2] = InpScanH1;
    scans[3] = InpScanM30; scans[4] = InpScanM15; scans[5] = InpScanM5;
    scans[6] = InpScanM1;
+   trades[0] = InpTradeD1; trades[1] = InpTradeH4; trades[2] = InpTradeH1;
+   trades[3] = InpTradeM30; trades[4] = InpTradeM15; trades[5] = InpTradeM5;
+   trades[6] = InpTradeM1;
    bool any_scan = false;
+   int scanned_frames = 0;
    for(int i = 0; i < 7; i++)
    {
       if(PeriodSeconds(frames[i]) <= 0)
          return false;
+      if(i > 0 && PeriodSeconds(frames[i - 1]) <= PeriodSeconds(frames[i]))
+         return false;
       if(scans[i])
+      {
          any_scan = true;
+         scanned_frames++;
+      }
+      if(trades[i] && !scans[i])
+         return false;
       for(int j = 0; j < i; j++)
          if(frames[i] == frames[j])
             return false;
    }
-   if(!any_scan || !InpEnableRetraceA)
+   if(!any_scan || !InpEnableRetraceA ||
+      InpBreakSelection == KBLX_CHOCH_AND_BOS)
+      return false;
+   if((InpMTFMode != KBLX_MTF_SINGLE || InpUseMTFTrendFilter ||
+       InpRequireHigherTrendConfirmation) &&
+      InpMinimumConfirmations > scanned_frames - 1)
       return false;
    int enabled_retracements = (InpEnableRetraceA ? 1 : 0) +
                               (InpEnableRetraceB ? 1 : 0) +
@@ -354,7 +390,9 @@ bool ValidateInputs()
       if(i < InpTakeProfitCount - 1)
          partial_total += partials[i];
    }
-   if(partial_total > 100.0 ||
+   if((InpTakeProfitCount > 1 &&
+       InpRiskReward <= targets[InpTakeProfitCount - 2]) ||
+      partial_total > 100.0 ||
       (InpRequireHigherTrendConfirmation && !InpUseMTFTrendFilter))
       return false;
    return true;
@@ -485,13 +523,26 @@ int CachedSymbolSlot(const string symbol)
    return slot;
 }
 
-bool PriceAtHigherDemand(const int symbol_slot, const int frame, const double price)
+double MarketDistancePoints(const string symbol, const double distance)
+{
+   double point = g_market_data.PointSize(symbol);
+   double price_distance = g_risk_manager.DistancePrice(
+      symbol, distance, InpMarketDistanceUnits);
+   if(point <= 0.0 || price_distance < 0.0)
+      return -1.0;
+   return price_distance / point;
+}
+
+bool PriceAtHigherZone(const int symbol_slot, const int frame, const double price,
+                       const KBLXDirection direction)
 {
    for(int higher = 0; higher < frame; higher++)
    {
       if(!FrameScanned(higher))
          continue;
-      KBLXZone zone = g_frame_contexts[symbol_slot][higher].demand;
+      KBLXZone zone = (direction == KBLX_DIRECTION_BUY
+                       ? g_frame_contexts[symbol_slot][higher].demand
+                       : g_frame_contexts[symbol_slot][higher].supply);
       if(zone.valid && price >= zone.low && price <= zone.high)
          return true;
    }
@@ -509,12 +560,16 @@ void BuildTradePlan(KBLXTradePlan &plan)
    plan.partial_percent[2] = InpTP_Partial3Percent;
    plan.partial_percent[3] = InpTP_Partial4Percent;
    plan.partial_percent[4] = InpTP_Partial5Percent;
+   plan.target_r[plan.count - 1] = InpRiskReward;
 }
 
 bool MTFTrendPasses(const int symbol_slot, const int entry_frame,
                    const KBLXDirection direction)
 {
-   if(!InpUseMTFTrendFilter)
+   bool use_filter = (InpUseMTFTrendFilter ||
+                     InpRequireHigherTrendConfirmation ||
+                     InpMTFMode != KBLX_MTF_SINGLE);
+   if(!use_filter)
       return true;
    int aligned = 0;
    double weight = 0.0;
@@ -522,6 +577,7 @@ bool MTFTrendPasses(const int symbol_slot, const int entry_frame,
    for(int frame = 0; frame < 7; frame++)
    {
       if(frame == entry_frame || !FrameScanned(frame) ||
+         (InpRequireHigherTrendConfirmation && frame > entry_frame) ||
          !g_frame_structures[symbol_slot][frame].valid)
          continue;
       available++;
@@ -533,12 +589,12 @@ bool MTFTrendPasses(const int symbol_slot, const int entry_frame,
          weight += FrameWeight(frame);
       }
    }
-   if(InpRequireHigherTrendConfirmation &&
-      (aligned < InpMinimumConfirmations || weight < InpMTFMinimumWeight))
+   if(available == 0)
       return false;
    if(InpMTFMode == KBLX_MTF_ALL && aligned < available)
       return false;
-   if(InpMTFMode == KBLX_MTF_MULTIPLE &&
+   if((InpUseMTFTrendFilter || InpRequireHigherTrendConfirmation ||
+       InpMTFMode == KBLX_MTF_MULTIPLE) &&
       (aligned < InpMinimumConfirmations || weight < InpMTFMinimumWeight))
       return false;
    return true;
@@ -573,11 +629,22 @@ void ScanMarkets()
          if(!g_frame_structures[symbol_slot][frame].valid || new_bar)
          {
             KBLXStructure structure;
+            double minimum_swing_points =
+              MarketDistancePoints(symbol, InpMinimumSwingDistancePoints);
+            double equal_swing_points =
+              MarketDistancePoints(symbol, InpEqualSwingTolerancePoints);
+            double zone_buffer_points =
+              MarketDistancePoints(symbol, InpZoneBufferPoints);
+            double volume_bin_points =
+              MarketDistancePoints(symbol, InpVolumeBinPoints);
+            if(minimum_swing_points < 0.0 || equal_swing_points < 0.0 ||
+              zone_buffer_points < 0.0 || volume_bin_points < 0.0)
+              continue;
             bool structure_ok = g_structure_engines[symbol_slot][frame].Update(
               g_market_data, symbol, timeframe,
               MathMin(InpHistoryBars, InpSwingLookback),
               InpSwingStrength, InpMaximumSwingAgeBars,
-              InpMinimumSwingDistancePoints, InpEqualSwingTolerancePoints,
+              minimum_swing_points, equal_swing_points,
               InpStructureSwings, structure);
             if(structure_ok)
             {
@@ -585,7 +652,7 @@ void ScanMarkets()
                  structure.trend = KBLX_TREND_NEUTRAL;
               g_frame_structures[symbol_slot][frame] = structure;
               g_context_engine.Build(g_market_data, symbol, timeframe, structure,
-                 InpContextLookbackBars, InpZoneBufferPoints, InpVolumeBinPoints,
+                 InpContextLookbackBars, zone_buffer_points, volume_bin_points,
                  g_frame_contexts[symbol_slot][frame]);
               g_frame_bar_time[symbol_slot][frame] = iTime(symbol, timeframe, 0);
             }
@@ -616,22 +683,38 @@ void ScanMarkets()
          KBLXStructure structure = g_frame_structures[symbol_slot][frame];
          KBLXSignal signal;
          signal.valid = false;
+         double retrace_tolerance =
+            MarketDistancePoints(symbol, InpRetraceATolerancePoints);
+         double sweep_tolerance =
+            MarketDistancePoints(symbol, InpLiquiditySweepTolerancePoints);
+         double trendline_width =
+            MarketDistancePoints(symbol, InpTrendlineWidthPoints);
+         if(retrace_tolerance < 0.0 || sweep_tolerance < 0.0 ||
+            trendline_width < 0.0)
+            continue;
          if(!g_signal_engine.Analyze(
               g_market_data, g_structure_engines[symbol_slot][frame],
               symbol, timeframe, structure, InpHistoryBars, InpBreakSelection,
+              InpRequireLiquiditySweep, sweep_tolerance,
               InpEnableRetraceB, InpEnableRetraceC, InpEnableRetraceD,
               InpRetraceMode, InpRequiredRetracements,
-              MathMax(InpRetraceATolerancePoints, InpZoneBufferPoints),
+              retrace_tolerance,
               InpFibRatio, InpFibUseWicks, InpRequirePrimaryGate,
+              InpPrimaryGateMode,
               InpSetupMaximumAgeBars, InpZoneExpiryBars, InpEngulfBodyOnly,
-              InpSecondaryFibRatio, InpTrendlineEnabled, InpTrendlineWidthPoints,
+              InpSecondaryFibRatio, InpTrendlineEnabled, trendline_width,
               false, structure, false, FrameWeight(frame), signal))
             continue;
          if(FrameNeedsHigherDemand(frame) && !FrameIndependent(frame))
          {
             MqlTick tick;
-            if(!SymbolInfoTick(symbol, tick) ||
-              !PriceAtHigherDemand(symbol_slot, frame, tick.ask))
+            double market_price = 0.0;
+            if(SymbolInfoTick(symbol, tick))
+              market_price = (signal.direction == KBLX_DIRECTION_BUY
+                              ? tick.ask : tick.bid);
+            if(market_price <= 0.0 ||
+              !PriceAtHigherZone(symbol_slot, frame, market_price,
+                                 signal.direction))
               continue;
          }
          if(!MTFTrendPasses(symbol_slot, frame, signal.direction) ||
@@ -658,8 +741,11 @@ void ScanMarkets()
               InpSessionLossLimitMoney))
             continue;
          if(InpPerformanceFilterEnabled &&
-            !g_trade_memory.AllowsSymbol(symbol, InpMagicNumber,
-              InpPerformanceMinimumSample, InpPerformanceMinimumWinRate))
+            !g_trade_memory.AllowsSetup(
+              symbol, InpMagicNumber,
+              signal.direction == KBLX_DIRECTION_BUY ? 'B' : 'S',
+              (int)timeframe, InpPerformanceMinimumSample,
+              InpPerformanceMinimumWinRate))
             continue;
          if(InpPreventDuplicateSetups && g_executor.HasDuplicate(signal.id))
             continue;
@@ -690,6 +776,8 @@ void ScanMarkets()
             PrintFormat("KBLX no executable setup for %s on %s",
                        symbol, EnumToString(timeframe));
       }
+      if(!InpAllowConcurrentSignals && any_signal)
+         break;
    }
    if(!any_signal)
       g_status = (InpAllowTrading ? "Scanning structure / waiting for confirmation" : "Trading disabled");

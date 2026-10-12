@@ -109,6 +109,9 @@ public:
          double trailing_start = risk_manager.DistancePrice(symbol, trailing_start_points, units);
          double trailing_distance = risk_manager.DistancePrice(symbol, trailing_distance_points, units);
          double trailing_step = risk_manager.DistancePrice(symbol, trailing_step_points, units);
+         if(break_even_offset < 0.0 || trailing_start < 0.0 ||
+            trailing_distance < 0.0 || trailing_step < 0.0)
+            continue;
          double proposed_sl = current_sl;
          bool change = false;
 
