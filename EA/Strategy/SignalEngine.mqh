@@ -205,7 +205,11 @@ public:
       if(require_closed_retrace)
       {
          int shift = 1;
-         if(shift < break_shift &&
+         bool beyond_invalidation =
+            (direction == KBLX_DIRECTION_BUY
+            ? rates[shift].low <= last_pivot.price
+            : rates[shift].high >= last_pivot.price);
+         if(shift < break_shift && !beyond_invalidation &&
             Touches(rates[shift],
                     direction == KBLX_DIRECTION_BUY ? zone_low : zone_high,
                     tolerance))
@@ -215,9 +219,11 @@ public:
             second_confirmation_shift = shift;
          }
       }
-      else if(MathAbs(live_price -
-                      (direction == KBLX_DIRECTION_BUY ? zone_low : zone_high))
-              <= tolerance)
+      else if((direction == KBLX_DIRECTION_BUY
+               ? live_price <= zone_low + tolerance &&
+                 live_price > last_pivot.price
+               : live_price >= zone_high - tolerance &&
+                 live_price < last_pivot.price))
       {
          zone_touch = true;
          retrace_time = rates[0].time;
@@ -346,7 +352,7 @@ public:
          line1 = swings[0];
          line2 = swings[0];
          int lines = 0;
-         for(int i = swing_count - 1; i >= 0; i--)
+         for(int i = first_index - 1; i >= 0; i--)
          {
             if(swings[i].type != (direction == KBLX_DIRECTION_BUY
                                   ? KBLX_SWING_LOW : KBLX_SWING_HIGH))

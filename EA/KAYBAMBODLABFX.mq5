@@ -178,7 +178,6 @@ input KBLXDistanceUnitMode InpManagementDistanceUnits = KBLX_UNITS_AUTO;
 
 input group "=== TAKE PROFIT ==="
 input KBLXTakeProfitMode InpTakeProfitMode = KBLX_TP_RR;
-input double InpRiskReward = 3.0;
 input int InpTakeProfitCount = 3;
 input double InpManualTakeProfitPrice = 0.0;
 input double InpFibonacciExtension = 1.618;
@@ -251,7 +250,7 @@ input group "=== DEBUG ==="
 input bool InpDebug = false;
 
 CKBLXMarketData g_market_data;
-CKBLXStructureEngine g_structure_engines[KBLX_MAX_SYMBOLS * KBLX_FRAME_COUNT];
+CKBLXStructureEngine g_structure_engines[];
 CKBLXContextEngine g_context_engine;
 CKBLXSignalEngine g_signal_engine;
 CKBLXTradingFilters g_filters;
@@ -265,6 +264,7 @@ KBLXStructure g_chart_structure;
 KBLXStructure g_frame_structures[KBLX_MAX_SYMBOLS][KBLX_FRAME_COUNT];
 KBLXMarketContext g_frame_contexts[KBLX_MAX_SYMBOLS][KBLX_FRAME_COUNT];
 datetime g_frame_bar_time[KBLX_MAX_SYMBOLS][KBLX_FRAME_COUNT];
+datetime g_frame_retry_time[KBLX_MAX_SYMBOLS][KBLX_FRAME_COUNT];
 string g_cached_symbols[KBLX_MAX_SYMBOLS];
 int g_cached_symbol_count = 0;
 datetime g_last_scan = 0;
@@ -282,7 +282,7 @@ bool ValidateInputs()
       InpMinimumConfirmations < 1 || InpMinimumConfirmations > 7 ||
       InpMaxPositionsTotal < 1 ||
       InpMaxPositionsPerSymbol < 1 || InpMaxPendingOrders < 0 ||
-      InpRiskReward <= 0.0 || InpTakeProfitCount < 1 || InpTakeProfitCount > 5 ||
+      InpTakeProfitCount < 1 || InpTakeProfitCount > 5 ||
       InpStopATRPeriod < 1 || InpStopATRMultiplier <= 0.0 ||
       InpFibonacciExtension <= 0.0 ||
       InpMaxCacheAgeSeconds < 0 || InpZoneExpiryBars < 1 ||
@@ -393,9 +393,7 @@ bool ValidateInputs()
       if(i < InpTakeProfitCount - 1)
          partial_total += partials[i];
    }
-   if((InpTakeProfitCount > 1 &&
-       InpRiskReward <= targets[InpTakeProfitCount - 2]) ||
-      partial_total > 100.0 ||
+   if(partial_total > 100.0 ||
       (InpRequireHigherTrendConfirmation && !InpUseMTFTrendFilter))
       return false;
    return true;
@@ -563,7 +561,6 @@ void BuildTradePlan(KBLXTradePlan &plan)
    plan.partial_percent[2] = InpTP_Partial3Percent;
    plan.partial_percent[3] = InpTP_Partial4Percent;
    plan.partial_percent[4] = InpTP_Partial5Percent;
-   plan.target_r[plan.count - 1] = InpRiskReward;
 }
 
 bool MTFTrendPasses(const int symbol_slot, const int entry_frame,
@@ -629,7 +626,10 @@ void ScanMarkets()
             continue;
          ENUM_TIMEFRAMES timeframe = FrameTimeframe(frame);
          bool new_bar = g_market_data.IsNewBar(symbol, timeframe);
-         if(!g_frame_structures[symbol_slot][frame].valid || new_bar)
+         bool retry_invalid = (!g_frame_structures[symbol_slot][frame].valid &&
+            (g_frame_retry_time[symbol_slot][frame] == 0 ||
+             TimeCurrent() - g_frame_retry_time[symbol_slot][frame] >= InpScanSeconds));
+         if(retry_invalid || new_bar)
          {
             KBLXStructure structure;
             double minimum_swing_points =
@@ -655,11 +655,19 @@ void ScanMarkets()
               if(!InpUseStructureTrend)
                  structure.trend = KBLX_TREND_NEUTRAL;
               g_frame_structures[symbol_slot][frame] = structure;
-              g_context_engine.Build(g_market_data, symbol, timeframe, structure,
-                 InpContextLookbackBars, zone_buffer_points, volume_bin_points,
-                 g_frame_contexts[symbol_slot][frame]);
-              g_frame_bar_time[symbol_slot][frame] = iTime(symbol, timeframe, 0);
             }
+            else
+            {
+              structure.valid = false;
+              structure.trend = KBLX_TREND_NEUTRAL;
+              g_frame_structures[symbol_slot][frame].valid = false;
+              g_frame_structures[symbol_slot][frame].trend = KBLX_TREND_NEUTRAL;
+            }
+            g_context_engine.Build(g_market_data, symbol, timeframe, structure,
+              InpContextLookbackBars, zone_buffer_points, volume_bin_points,
+              g_frame_contexts[symbol_slot][frame]);
+            g_frame_bar_time[symbol_slot][frame] = iTime(symbol, timeframe, 0);
+            g_frame_retry_time[symbol_slot][frame] = TimeCurrent();
          }
       }
 
@@ -802,6 +810,15 @@ int OnInit()
       Print("KBLX initialization rejected invalid or incompatible inputs.");
       return INIT_PARAMETERS_INCORRECT;
    }
+   string symbols[];
+   int symbol_count = BuildSymbolList(symbols);
+   if(symbol_count < 1 ||
+      ArrayResize(g_structure_engines, symbol_count * KBLX_FRAME_COUNT) !=
+      symbol_count * KBLX_FRAME_COUNT)
+   {
+      Print("KBLX initialization failed: no tradable symbols or engine allocation error.");
+      return INIT_FAILED;
+   }
    g_executor.Configure(InpMagicNumber, InpMaxPositionsTotal,
                         InpMaxPositionsPerSymbol, InpMaxPendingOrders,
                         InpDeviationPoints);
@@ -818,6 +835,7 @@ void OnDeinit(const int reason)
 {
    EventKillTimer();
    g_dashboard.Cleanup();
+   ArrayFree(g_structure_engines);
 }
 
 void ManagePositions()

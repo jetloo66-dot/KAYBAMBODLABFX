@@ -9,7 +9,7 @@
 | Position limits | PARTIAL | Total/per-symbol positions and per-symbol pending counts; no buy/sell-side or per-setup cap. |
 | SL/TP | PARTIAL | Fixed/zone/swing/ATR/manual/hybrid SL; configured TP1–TP5 R stages feed partial management, and the selected final target is attached to the position. Intermediate broker-side TP orders are not placed. |
 | BE/trailing/partials | PARTIAL | Break-even and trailing only tighten. Intermediate R-stage partial percentages are bounded. Netting/hedging-specific partial-close behavior needs terminal testing. |
-| Period targets | PARTIAL | Realized server-time minute/hour/session/day P/L blocks new entries. Open positions are not force-closed, and percentage target basis needs broker validation. |
+| Period targets | PARTIAL | Realized server-time minute/hour/session/day P/L blocks new entries; percent basis is reconstructed from account balance changes in the window. Open positions are not force-closed. |
 | News/session/spread | PARTIAL | Native high-impact calendar for base/quote currency, server-time day/session and spread checks. Calendar coverage and Strategy Tester support are broker-dependent; enabled lookup errors fail closed. |
 | Alerts | PARTIAL | Signal alerts to MT5, optional push and opt-in Telegram. Not all fills, modifications, partials, rejections and close events have dedicated notifications. Token/chat values are runtime-only and excluded from logs/UI. |
 | Dashboard | PARTIAL | Status/trend, per-frame demand/supply/volume summary, swing arrows, accepted setup pivots/break/retrace connector, zones, SL and final TP use own-prefix objects. Account analytics are not shown. |

@@ -126,16 +126,27 @@ public:
          return false;
       }
       double realized = 0.0;
+      double account_movement = 0.0;
       for(int i = 0; i < HistoryDealsTotal(); i++)
       {
          ulong ticket = HistoryDealGetTicket(i);
-         if(ticket == 0 || HistoryDealGetInteger(ticket, DEAL_MAGIC) != magic)
+         if(ticket == 0)
             continue;
-         realized += HistoryDealGetDouble(ticket, DEAL_PROFIT) +
-                     HistoryDealGetDouble(ticket, DEAL_COMMISSION) +
-                     HistoryDealGetDouble(ticket, DEAL_SWAP);
+         double deal_change = HistoryDealGetDouble(ticket, DEAL_PROFIT) +
+                              HistoryDealGetDouble(ticket, DEAL_COMMISSION) +
+                              HistoryDealGetDouble(ticket, DEAL_SWAP) +
+                              HistoryDealGetDouble(ticket, DEAL_FEE);
+         account_movement += deal_change;
+         ENUM_DEAL_TYPE type =
+            (ENUM_DEAL_TYPE)HistoryDealGetInteger(ticket, DEAL_TYPE);
+         if(HistoryDealGetInteger(ticket, DEAL_MAGIC) == magic &&
+            (type == DEAL_TYPE_BUY || type == DEAL_TYPE_SELL))
+            realized += deal_change;
       }
-      double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+      double period_start_balance = AccountInfoDouble(ACCOUNT_BALANCE) -
+                                    account_movement;
+      if(period_start_balance <= 0.0)
+         period_start_balance = AccountInfoDouble(ACCOUNT_BALANCE);
       if(profit_limit_money > 0.0 && realized >= profit_limit_money)
       {
          CachePnLResult(now, false);
@@ -147,13 +158,13 @@ public:
          return false;
       }
       if(profit_enabled && profit_percent > 0.0 &&
-         realized >= equity * profit_percent / 100.0)
+         realized >= period_start_balance * profit_percent / 100.0)
       {
          CachePnLResult(now, false);
          return false;
       }
       if(loss_enabled && loss_percent > 0.0 &&
-         realized <= -equity * loss_percent / 100.0)
+         realized <= -period_start_balance * loss_percent / 100.0)
       {
          CachePnLResult(now, false);
          return false;

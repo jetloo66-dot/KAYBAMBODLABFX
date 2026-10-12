@@ -89,8 +89,12 @@ public:
                                       ? MathFloor((initial_volume * plan.partial_percent[stage] / 100.0) / step) * step
                                       : 0.0);
                close_volume = NormalizeDouble(close_volume, 8);
+               if(close_volume < minimum && remaining >= 2.0 * minimum)
+                  close_volume = minimum;
                if(close_volume < minimum || remaining - close_volume < minimum)
                {
+                  PrintFormat("KBLX partial target %d skipped for %s: volume %.8f cannot be split",
+                              stage + 1, symbol, remaining);
                   GlobalVariableSet(partial_key, (double)TimeCurrent());
                   continue;
                }

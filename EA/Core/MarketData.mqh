@@ -65,19 +65,29 @@ public:
          return false;
 
       datetime current_bar = iTime(symbol, timeframe, 0);
-      bool stale = (m_cache[slot].count < requested ||
-                    m_cache[slot].bar_time != current_bar ||
-                    TimeCurrent() - m_cache[slot].refreshed > m_max_cache_age_seconds);
-      if(stale)
+      bool refresh_history = (m_cache[slot].count < requested ||
+                              m_cache[slot].bar_time != current_bar);
+      if(refresh_history)
       {
-         ArrayResize(m_cache[slot].rates, requested);
+         int cache_size = MathMax(requested, m_cache[slot].count);
+         ArrayResize(m_cache[slot].rates, cache_size);
          ArraySetAsSeries(m_cache[slot].rates, true);
-         int copied = CopyRates(symbol, timeframe, 0, requested, m_cache[slot].rates);
+         int copied = CopyRates(symbol, timeframe, 0, cache_size, m_cache[slot].rates);
          if(copied < requested)
             return false;
 
          m_cache[slot].count = copied;
          m_cache[slot].bar_time = current_bar;
+         m_cache[slot].refreshed = TimeCurrent();
+      }
+      else if(m_max_cache_age_seconds == 0 ||
+              TimeCurrent() - m_cache[slot].refreshed > m_max_cache_age_seconds)
+      {
+         MqlRates latest[];
+         ArrayResize(latest, 1);
+         if(CopyRates(symbol, timeframe, 0, 1, latest) != 1)
+            return false;
+         m_cache[slot].rates[0] = latest[0];
          m_cache[slot].refreshed = TimeCurrent();
       }
 

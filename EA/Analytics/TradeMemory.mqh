@@ -123,7 +123,7 @@ public:
          return false;
       int samples = 0;
       int wins = 0;
-      string setup_prefix = StringFormat("KBLX%c%d", direction, timeframe);
+      string setup_prefix = StringFormat("KBLX%c_%d_", direction, timeframe);
       KBLXMemoryRecord record;
       while(ReadRecord(file, record))
       {

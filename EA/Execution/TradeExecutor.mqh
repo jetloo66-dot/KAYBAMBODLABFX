@@ -137,7 +137,7 @@ public:
          return false;
       m_trade.SetTypeFillingBySymbol(signal.symbol);
 
-      string comment = StringFormat("KBLX%c%d%d",
+      string comment = StringFormat("KBLX%c_%d_%d",
          signal.direction == KBLX_DIRECTION_BUY ? 'B' : 'S',
          (int)signal.primary_timeframe, (int)signal.retracement);
       bool use_pending = (execution_mode == KBLX_PENDING_ONLY);
