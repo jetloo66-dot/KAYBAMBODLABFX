@@ -111,6 +111,7 @@ input KBLXBreakSelection InpBreakSelection = KBLX_CHOCH_OR_BOS;
 input group "=== RETRACEMENT A ==="
 input bool InpEnableRetraceA = true;
 input double InpRetraceATolerancePoints = 5.0;
+input bool InpRequireClosedRetrace = false;
 
 input group "=== RETRACEMENT B ==="
 input bool InpEnableRetraceB = true;
@@ -618,7 +619,8 @@ void ScanMarkets()
       if(!SymbolSelect(symbol, true))
          continue;
       int symbol_slot = CachedSymbolSlot(symbol);
-      if(symbol_slot < 0)
+      if(symbol_slot < 0 ||
+         symbol_slot >= ArraySize(g_structure_engines) / KBLX_FRAME_COUNT)
          continue;
       for(int frame = 0; frame < KBLX_FRAME_COUNT; frame++)
       {
@@ -735,7 +737,8 @@ void ScanMarkets()
               InpPrimaryGateMode,
               InpSetupMaximumAgeBars, InpZoneExpiryBars, InpEngulfBodyOnly,
               InpSecondaryFibRatio, InpTrendlineEnabled, trendline_width,
-              false, structure, false, FrameWeight(frame), signal))
+              InpRequireClosedRetrace, structure, false,
+              FrameWeight(frame), signal))
             continue;
          if(FrameNeedsHigherDemand(frame) && !FrameIndependent(frame))
          {
@@ -838,7 +841,8 @@ int OnInit()
                         InpDeviationPoints);
    g_market_data.SetMaximumCacheAge(InpMaxCacheAgeSeconds);
    g_position_manager.Configure(InpMagicNumber);
-   g_alerts.Configure(InpTelegramEnabled, InpTelegramBotToken, InpTelegramChatId);
+   g_alerts.Configure(InpAlertsEnabled, InpTelegramEnabled,
+                      InpTelegramBotToken, InpTelegramChatId);
    g_chart_structure.valid = false;
    EventSetTimer(InpScanSeconds);
    g_status = "Ready";

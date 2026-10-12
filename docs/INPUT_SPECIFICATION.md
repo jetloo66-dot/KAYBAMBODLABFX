@@ -15,7 +15,7 @@ The parameter declarations in `EA/KAYBAMBODLABFX.mq5` are authoritative. The str
 | 9 | `=== LIQUIDITY ===` | `InpRequireLiquiditySweep=false`; `InpLiquiditySweepTolerancePoints=0` | Require LL1/HH1 to extend beyond LL2/HH2 by the configured nonnegative point distance. |
 | 10 | `=== REVERSAL ===` | `InpEnableReversals=true`; `InpSetupMaximumAgeBars=50` | Enable three-pivot reversal detection and maximum age. |
 | 11 | `=== BOS/CHOCH ===` | `InpBreakSelection=CHOCH_OR_BOS` | Require a closed-bar crossing above LH2/below HL2; choose CHOCH, BOS or either. The unsupported AND selection is rejected at initialization. |
-| 12 | `=== RETRACEMENT A ===` | `InpEnableRetraceA=true`; `InpRetraceATolerancePoints=5` | Mandatory return to LL2 candle low / HH2 candle high within tolerance; this threshold follows `InpMarketDistanceUnits`; disabling A rejects initialization. |
+| 12 | `=== RETRACEMENT A ===` | `InpEnableRetraceA=true`; `InpRetraceATolerancePoints=5`; `InpRequireClosedRetrace=false` | Mandatory return to LL2 candle low / HH2 candle high within tolerance; this threshold follows `InpMarketDistanceUnits`. Default uses live ticks; optional closed-bar confirmation waits for a later candle. Disabling A rejects initialization. |
 | 13 | `=== RETRACEMENT B ===` | `InpEnableRetraceB=true`; `InpEngulfBodyOnly=true` | Optional symmetric engulfed-candle zone; body bounds when enabled, wick bounds otherwise. |
 | 14 | `=== RETRACEMENT C ===` | `InpEnableRetraceC=true` | Optional last-opposite-candle zone module. |
 | 15 | `=== RETRACEMENT D ===` | `InpEnableRetraceD=true`; `InpFibRatio=0.618`; `InpFibUseWicks=true`; `InpSecondaryFibRatio=0.5` | Optional Fibonacci retracement and gate ratios; both ratios strictly between 0 and 1. |

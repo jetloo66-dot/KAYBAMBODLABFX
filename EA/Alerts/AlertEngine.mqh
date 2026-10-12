@@ -8,7 +8,8 @@ class CKBLXAlertEngine
 private:
    string m_token;
    string m_chat_id;
-   bool m_enabled;
+   bool m_alerts_enabled;
+   bool m_telegram_enabled;
 
    string UrlEncode(const string value)
    {
@@ -28,19 +29,23 @@ private:
    }
 
 public:
-   void Configure(const bool enabled, const string token, const string chat_id)
+   void Configure(const bool alerts_enabled, const bool telegram_enabled,
+                  const string token, const string chat_id)
    {
-      m_enabled = enabled;
+      m_alerts_enabled = alerts_enabled;
+      m_telegram_enabled = telegram_enabled;
       m_token = token;
       m_chat_id = chat_id;
    }
 
    void Notify(const string message, const bool push_enabled)
    {
+      if(!m_alerts_enabled)
+         return;
       Alert(message);
       if(push_enabled)
          SendNotification(message);
-      if(!m_enabled || m_token == "" || m_chat_id == "")
+      if(!m_telegram_enabled || m_token == "" || m_chat_id == "")
          return;
 
       string url = "https://api.telegram.org/bot" + m_token + "/sendMessage";
